@@ -14,7 +14,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef __aarch64__
+#include "sse2neon.h"
+#else
 #include <emmintrin.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

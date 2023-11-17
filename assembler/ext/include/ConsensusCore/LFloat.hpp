@@ -36,7 +36,13 @@
 // Author: David Alexander
 
 #pragma once
+
+#ifdef __aarch64__
+#include "sse2neon.h"
+#else
 #include <xmmintrin.h>
+#endif
+
 #include <cfloat>
 #include <ostream>
 

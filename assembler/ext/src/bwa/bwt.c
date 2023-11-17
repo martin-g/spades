@@ -31,8 +31,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <limits.h>
-#include "bwa/utils.h"
-#include "bwa/bwt.h"
+#include "utils.h"
+#include "bwt.h"
 #include "kvec.h"
 
 #ifdef USE_MALLOC_WRAPPERS

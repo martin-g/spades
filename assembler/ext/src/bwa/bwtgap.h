@@ -1,7 +1,7 @@
 #ifndef BWTGAP_H_
 #define BWTGAP_H_
 
-#include "bwa/bwt.h"
+#include "bwt.h"
 #include "bwtaln.h"
 
 typedef struct { // recursion stack

@@ -1,8 +1,8 @@
 #ifndef BWASE_H
 #define BWASE_H
 
-#include "bwa/bntseq.h"
-#include "bwa/bwt.h"
+#include "bntseq.h"
+#include "bwt.h"
 #include "bwtaln.h"
 
 #ifdef __cplusplus

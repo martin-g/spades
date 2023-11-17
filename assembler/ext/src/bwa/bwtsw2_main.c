@@ -3,10 +3,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "bwa/bwt.h"
+#include "bwt.h"
 #include "bwtsw2.h"
-#include "bwa/utils.h"
-#include "bwa/bwa.h"
+#include "utils.h"
+#include "bwa.h"
 
 int bwa_bwtsw2(int argc, char *argv[])
 {

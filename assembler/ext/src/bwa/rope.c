@@ -3,8 +3,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <zlib.h>
-#include "bwa/rle.h"
-#include "bwa/rope.h"
+#include "rle.h"
+#include "rope.h"
 
 /*******************
  *** Memory Pool ***

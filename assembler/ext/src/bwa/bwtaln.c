@@ -10,8 +10,8 @@
 #endif
 #include "bwtaln.h"
 #include "bwtgap.h"
-#include "bwa/utils.h"
-#include "bwa/bwa.h"
+#include "utils.h"
+#include "bwa.h"
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>

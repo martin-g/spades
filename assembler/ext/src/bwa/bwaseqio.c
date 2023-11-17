@@ -1,7 +1,7 @@
 #include <zlib.h>
 #include <ctype.h>
 #include "bwtaln.h"
-#include "bwa/utils.h"
+#include "utils.h"
 #include "bamlite.h"
 
 #include "kseq.h"

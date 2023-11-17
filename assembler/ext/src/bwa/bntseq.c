@@ -1,6 +1,8 @@
 /* The MIT License
 
-   Copyright (c) 2008 Genome Research Ltd (GRL).
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -22,17 +24,14 @@
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
 #include <unistd.h>
 #include <errno.h>
-#include "bwa/bntseq.h"
-#include "bwa/utils.h"
+#include "bntseq.h"
+#include "utils.h"
 
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
@@ -197,7 +196,13 @@ bntseq_t *bns_restore(const char *prefix)
 				}
 				while (c != '\n' && c != EOF) c = fgetc(fp);
 				i = 0;
-			} else str[i++] = c; // FIXME: potential segfault here
+			} else {
+				if (i >= 1022) {
+					fprintf(stderr, "[E::%s] sequence name longer than 1023 characters. Abort!\n", __func__);
+					exit(1);
+				}
+				str[i++] = c;
+			}
 		}
 		kh_destroy(str, h);
 		fclose(fp);
@@ -258,7 +263,7 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 		}
 		lasts = seq->seq.s[i];
 		{ // fill buffer
-			if (c >= 4) c = i & 3; /* SPADES LOCAL */
+			if (c >= 4) c = lrand48()&3;
 			if (bns->l_pac == *m_pac) { // double the pac size
 				*m_pac <<= 1;
 				pac = realloc(pac, *m_pac/4);

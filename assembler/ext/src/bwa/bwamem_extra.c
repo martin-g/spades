@@ -1,7 +1,33 @@
+/* The MIT License
+
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+*/
 #include <limits.h>
-#include "bwa/bwa.h"
-#include "bwa/bwamem.h"
-#include "bwa/bntseq.h"
+#include "bwa.h"
+#include "bwamem.h"
+#include "bntseq.h"
 #include "kstring.h"
 
 /***************************
@@ -82,7 +108,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	seq = malloc(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq, 0);
-	mem_mark_primary_se(opt, ar.n, ar.a, 42); /* SPADES LOCAL */
+	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
 	free(seq);
 	return ar;
 }
@@ -126,6 +152,12 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			kputc("MIDSHN"[t.cigar[k]&0xf], &str);
 		}
 		kputc(',', &str); kputw(t.NM, &str);
+		if (opt->flag & MEM_F_XB) {
+			kputc(',', &str);
+			kputw(t.score, &str);
+			kputc(',', &str);
+			kputw(t.mapq, &str);
+		}
 		kputc(';', &str);
 		free(t.cigar);
 		kputsn(str.s, str.l, &aln[r]);

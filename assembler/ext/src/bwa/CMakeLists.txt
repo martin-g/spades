@@ -42,3 +42,4 @@ endif()
 
 install(TARGETS spades-bwa
         RUNTIME DESTINATION bin)
+

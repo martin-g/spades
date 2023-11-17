@@ -1,11 +1,37 @@
+/* The MIT License
+
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+*/
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 #include "kstring.h"
-#include "bwa/bwamem.h"
+#include "bwamem.h"
 #include "kvec.h"
-#include "bwa/utils.h"
+#include "utils.h"
 #include "ksw.h"
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -68,11 +94,11 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		uint64_v *q = &isize[d];
 		int p25, p50, p75, x;
 		if (q->n < MIN_DIR_CNT) {
-			if (bwa_verbose >= 2) fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+			fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 			r->failed = 1;
 			free(q->a);
 			continue;
-		} else if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+		} else fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 		ks_introsort_64(q->n, q->a);
 		p25 = q->a[(int)(.25 * q->n + .499)];
 		p50 = q->a[(int)(.50 * q->n + .499)];
@@ -80,8 +106,8 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		r->low  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
 		if (r->low < 1) r->low = 1;
 		r->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
-		if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
-		if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
+		fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
+		fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
 		for (i = x = 0, r->avg = 0; i < q->n; ++i)
 			if (q->a[i] >= r->low && q->a[i] <= r->high)
 				r->avg += q->a[i], ++x;
@@ -90,13 +116,13 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 			if (q->a[i] >= r->low && q->a[i] <= r->high)
 				r->std += (q->a[i] - r->avg) * (q->a[i] - r->avg);
 		r->std = sqrt(r->std / x);
-		if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
+		fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
 		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
 		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
 		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
 		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
 		if (r->low < 1) r->low = 1;
-		if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
+		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
 		free(q->a);
 	}
 	for (d = 0, max = 0; d < 4; ++d)
@@ -104,7 +130,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 	for (d = 0; d < 4; ++d)
 		if (pes[d].failed == 0 && isize[d].n < max * MIN_DIR_RATIO) {
 			pes[d].failed = 1;
-			if (bwa_verbose >= 2) fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+			fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 		}
 }
 
@@ -353,7 +379,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		for (i = 0; i < n_aa[0]; ++i)
 			mem_aln2sam(opt, bns, &str, &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
-		s[0].sam = str.s; str.m = str.l = 0; str.s = 0;
+		s[0].sam = strdup(str.s); str.l = 0;
 		for (i = 0; i < n_aa[1]; ++i)
 			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
 		s[1].sam = str.s;

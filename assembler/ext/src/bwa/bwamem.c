@@ -1,3 +1,29 @@
+/* The MIT License
+
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+*/
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,12 +35,12 @@
 #endif
 
 #include "kstring.h"
-#include "bwa/bwamem.h"
-#include "bwa/bntseq.h"
+#include "bwamem.h"
+#include "bntseq.h"
 #include "ksw.h"
 #include "kvec.h"
 #include "ksort.h"
-#include "bwa/utils.h"
+#include "utils.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -809,9 +835,38 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
-void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *p, const mem_aln_t *m) {
+static inline void add_cigar(const mem_opt_t *opt, mem_aln_t *p, kstring_t *str, int which)
+{
+	int i;
+	if (p->n_cigar) { // aligned
+		for (i = 0; i < p->n_cigar; ++i) {
+			int c = p->cigar[i]&0xf;
+			if (!(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt && (c == 3 || c == 4))
+				c = which? 4 : 3; // use hard clipping for supplementary alignments
+			kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
+		}
+	} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
+}
+
+void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
+{
+	int i, l_name;
+	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
+
+	if (m_) mtmp = *m_, m = &mtmp;
+	// set flag
+	p->flag |= m? 0x1 : 0; // is paired in sequencing
+	p->flag |= p->rid < 0? 0x4 : 0; // is mapped
+	p->flag |= m && m->rid < 0? 0x8 : 0; // is mate mapped
+	if (p->rid < 0 && m && m->rid >= 0) // copy mate to alignment
+		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0;
+	if (m && m->rid < 0 && p->rid >= 0) // copy alignment to mate
+		m->rid = p->rid, m->pos = p->pos, m->is_rev = p->is_rev, m->n_cigar = 0;
+	p->flag |= p->is_rev? 0x10 : 0; // is on the reverse strand
+	p->flag |= m && m->is_rev? 0x20 : 0; // is mate on the reverse strand
+
 	// print up to CIGAR
-	int i, l_name = strlen(s->name);
+	l_name = strlen(s->name);
 	ks_resize(str, str->l + s->l_seq + l_name + (s->qual? s->l_seq : 0) + 20);
 	kputsn(s->name, l_name, str); kputc('\t', str); // QNAME
 	kputw((p->flag&0xffff) | (p->flag&0x10000? 0x100 : 0), str); kputc('\t', str); // FLAG
@@ -819,15 +874,8 @@ void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
 		kputw(p->mapq, str); kputc('\t', str); // MAPQ
-		if (p->n_cigar) { // aligned
-			for (i = 0; i < p->n_cigar; ++i) {
-				int c = p->cigar[i]&0xf;
-				if (!(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt && (c == 3 || c == 4))
-					c = which? 4 : 3; // use hard clipping for supplementary alignments
-				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
-			}
-		} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
-	} else kputsn("*\t0\t0\t*", 7, str); // without coordinate
+		add_cigar(opt, p, str, which);
+	} else kputsn("*\t0\t0\t*", 7, str); // without coordinte
 	kputc('\t', str);
 
 	// print the mate position if applicable
@@ -883,6 +931,8 @@ void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("\tNM:i:", 6, str); kputw(p->NM, str);
 		kputsn("\tMD:Z:", 6, str); kputs((char*)(p->cigar + p->n_cigar), str);
 	}
+	if (m && m->n_cigar) { kputsn("\tMC:Z:", 6, str); add_cigar(opt, m, str, which); }
+	if (m) { kputsn("\tMQ:i:", 6, str); kputw(m->mapq, str);}
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
@@ -909,7 +959,10 @@ void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		if (p->alt_sc > 0)
 			ksprintf(str, "\tpa:f:%.3f", (double)p->score / p->alt_sc);
 	}
-	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
+	if (p->XA) {
+		kputsn((opt->flag&MEM_F_XB)? "\tXB:Z:" : "\tXA:Z:", 6, str);
+		kputs(p->XA, str);
+	}
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	if ((opt->flag&MEM_F_REF_HDR) && p->rid >= 0 && bns->anns[p->rid].anno != 0 && bns->anns[p->rid].anno[0] != 0) {
 		int tmp;
@@ -920,27 +973,6 @@ void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 			if (str->s[i] == '\t') str->s[i] = ' ';
 	}
 	kputc('\n', str);
-}
-
-void (*mem_fmt_fnc)(const mem_opt_t*, const bntseq_t*, kstring_t*, bseq1_t*, int, const mem_aln_t*, int, const mem_aln_t*, const mem_aln_t*) = &mem_fmt_sam;
-
-void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
-{
-	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
-
-	if (m_) mtmp = *m_, m = &mtmp;
-	// set flag
-	p->flag |= m? 0x1 : 0; // is paired in sequencing
-	p->flag |= p->rid < 0? 0x4 : 0; // is mapped
-	p->flag |= m && m->rid < 0? 0x8 : 0; // is mate mapped
-	if (p->rid < 0 && m && m->rid >= 0) // copy mate to alignment
-		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0;
-	if (m && m->rid < 0 && p->rid >= 0) // copy alignment to mate
-		m->rid = p->rid, m->pos = p->pos, m->is_rev = p->is_rev, m->n_cigar = 0;
-	p->flag |= p->is_rev? 0x10 : 0; // is on the reverse strand
-	p->flag |= m && m->is_rev? 0x20 : 0; // is mate on the reverse strand
-
-	(*mem_fmt_fnc)(opt, bns, str, s, n, list, which, p, m);
 }
 
 /************************
@@ -1024,7 +1056,8 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (l && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
-		if (l && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		if (!(opt->flag & MEM_F_KEEP_SUPP_MAPQ) && l && !p->is_alt && q->mapq > aa.a[0].mapq)
+			q->mapq = aa.a[0].mapq; // lower mapq for supplementary mappings, unless -5 or -q is applied
 		++l;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record

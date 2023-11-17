@@ -1,4 +1,17 @@
-[![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
+[![Build Status](https://github.com/lh3/bwa/actions/workflows/ci.yaml/badge.svg)](https://github.com/lh3/bwa/actions)
+[![SourceForge Downloads](https://img.shields.io/sourceforge/dt/bio-bwa.svg?label=SF%20downloads)](https://sourceforge.net/projects/bio-bwa/files/?source=navbar)
+[![GitHub Downloads](https://img.shields.io/github/downloads/lh3/bwa/total.svg?style=flat&label=GitHub%20downloads)](https://github.com/lh3/bwa/releases)
+[![BioConda Install](https://img.shields.io/conda/dn/bioconda/bwa.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/bwa)
+
+**Note: [minimap2][minimap2] has replaced BWA-MEM for __PacBio and Nanopore__ read
+alignment.** It retains all major BWA-MEM features, but is ~50 times as fast,
+more versatile, more accurate and produces better base-level alignment.
+A beta version of [BWA-MEM2][bwa-mem2] has been released for short-read mapping.
+BWA-MEM2 is about twice as fast as BWA-MEM and outputs near identical alignments.
+
+[minimap2]: https://github.com/lh3/minimap2
+[bwa-mem2]: https://github.com/bwa-mem2/bwa-mem2
+
 ## Getting started
 
 	git clone https://github.com/lh3/bwa.git
@@ -25,7 +38,7 @@ different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 
 ## Availability
 
-BWA is released under [Apache 2.0][1]. The latest source code is [freely
+BWA is released under [GPLv3][1]. The latest source code is [freely
 available at github][2]. Released packages can [be downloaded][3] at
 SourceForge. After you acquire the source code, simply use `make` to compile
 and copy the single executable `bwa` to the destination you want. The only

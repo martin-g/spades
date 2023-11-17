@@ -6,9 +6,8 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 #include "easel.h"
@@ -241,7 +240,7 @@ p7_GDomainDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, const P7_GMX *bck, P
                  -----------------    ------------------     -------------------
    21 Aug 08      6.62u (21.8 Mc/s)    12.52u (21.7 Mc/s)     106.27u (21.7 Mc/s)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -285,8 +284,8 @@ main(int argc, char **argv)
   float           fsc, bsc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
@@ -355,7 +354,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7GENERIC_DECODING_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -400,8 +399,8 @@ main(int argc, char **argv)
   float           fsc, bsc;
 
   /* Read in one query profile */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Read in one target sequence */
@@ -480,9 +479,3 @@ dump_matrix_csv(FILE *fp, P7_GMX *pp, int istart, int iend, int kstart, int kend
 
 
 
-/*****************************************************************
- * @LICENSE@
- *   
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

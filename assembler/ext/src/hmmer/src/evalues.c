@@ -5,12 +5,10 @@
  *   2. Determination of individual E-value parameters
  *   3. Statistics and specific experiment drivers
  *   4. Benchmark driver
- *   5. Copyright and license information
  * 
  * SRE, Mon Aug  6 13:00:06 2007
- * SVN $Id$
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_gumbel.h"
@@ -244,9 +242,7 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
   double  *xv      = NULL;
   int      i;
   float    sc, nullsc;
-#ifndef p7_IMPL_DUMMY
   float    maxsc   = (255 - om->base_b) / om->scale_b; /* if score overflows, use this */
-#endif
   int      status;
 
   if (ox == NULL) { status = eslEMEM; goto ERROR; }
@@ -262,9 +258,7 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
       status = p7_MSVFilter(dsq, L, om, ox, &sc); 
-#ifndef p7_IMPL_DUMMY
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
-#endif
       if (status != eslOK)     goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
@@ -317,9 +311,7 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
   double  *xv      = NULL;
   int      i;
   float    sc, nullsc;
-#ifndef p7_IMPL_DUMMY
   float    maxsc   = (32767.0 - om->base_w) / om->scale_w; /* if score overflows, use this [J4/139] */
-#endif
   int      status;
 
   if (ox == NULL) { status = eslEMEM; goto ERROR; }
@@ -335,9 +327,7 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
       status = p7_ViterbiFilter(dsq, L, om, ox, &sc); 
-#ifndef p7_IMPL_DUMMY
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
-#endif
       if (status != eslOK)     goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
@@ -479,7 +469,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 /* The J1/135 experiment determining precision of mu, tau estimates can be done with this driver by setting Z=1000 or so. 
  * There used to be a separate script, tagged p7EXP_J1_135, to specifically run that experiment.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -544,7 +534,7 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--fwdonly") == TRUE) { do_msv = FALSE; do_vit = FALSE; do_fwd =  TRUE; }
   else                                                  { do_msv =  TRUE; do_vit =  TRUE; do_fwd =  TRUE; }
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
     {
       if (bg == NULL) bg = p7_bg_Create(abc);
@@ -599,7 +589,7 @@ main(int argc, char **argv)
  *  27 Dec 08 on wanderoo: 24 msec per RRM_1 calibration; 37 msec for Caudal_act
  *  profiling shows 75% in Forward; 12% esl_random(); <3% in MSVFilter.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -628,8 +618,8 @@ main(int argc, char **argv)
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   esl_stopwatch_Start(w);
@@ -649,7 +639,3 @@ main(int argc, char **argv)
 #endif /*p7EVALUES_BENCHMARK*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

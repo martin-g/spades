@@ -6,10 +6,8 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  */
-
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -334,7 +332,7 @@ p7_GHybrid(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *o
  *        MSV  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -379,8 +377,8 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, bench_time, Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -558,7 +556,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
   P7_GMX         *gx   = NULL;
   float  vsc, fsc;
   float  bg_ll;   		/* log P(seq | bg) */
-  double vp, fp;		/* P(seq,\pi | model) and P(seq | model) */
+  double fp;	      	        /* P(seq | model) */
   int L;
   int i;
   double total_p;
@@ -593,8 +591,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
 	  /* calculate bg log likelihood component of the scores */
 	  for (bg_ll = 0., i = 1; i <= L; i++)  bg_ll += log(bg->f[dsq[i]]);
 	  
-	  /* convert to probabilities, adding the bg LL back to the LLR */
-	  vp =  exp(vsc + bg_ll);
+	  /* convert to probability, adding the bg LL back to the LLR */
 	  fp =  exp(fsc + bg_ll);
 
 	  if (esl_opt_GetBoolean(go, "--vv")) {
@@ -639,7 +636,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
 #include "esl_getopts.h"
 #include "esl_msa.h"
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -700,7 +697,7 @@ main(int argc, char **argv)
 /* 
    gcc -g -O2 -o generic_fwdback_example -Dp7GENERIC_FWDBACK_EXAMPLE -I. -I../easel -L. -L../easel generic_fwdback.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -748,8 +745,8 @@ main(int argc, char **argv)
   p7_FLogsumInit();
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Read in one sequence */
@@ -826,9 +823,4 @@ main(int argc, char **argv)
 #endif /*p7GENERIC_FWDBACK_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$  
- *****************************************************************/
+

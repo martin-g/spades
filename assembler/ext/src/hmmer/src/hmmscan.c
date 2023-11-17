@@ -5,7 +5,7 @@
  *    only have a master, no workers. See Infernal commit r3972 on the
  *    same point; and same note in hmmsearch.c's to do list.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,23 +18,23 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #include "esl_mpi.h"
-#endif /*HAVE_MPI*/
+#endif 
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif
 
 #include "hmmer.h"
 
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif
   ESL_SQ           *qsq;
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
@@ -47,18 +47,12 @@ typedef struct {
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#if defined (HMMER_THREADS) && defined (HMMER_MPI)
 #define CPUOPTS     "--mpi"
 #define MPIOPTS     "--cpu"
 #else
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
-#endif
-
-#ifdef HAVE_MPI
-#define DAEMONOPTS  "-o,--tblout,--domtblout,--pfamtblout,--mpi,--stall"
-#else
-#define DAEMONOPTS  "-o,--tblout,--domtblout,--pfamtblout"
 #endif
 
 static ESL_OPTIONS options[] = {
@@ -99,11 +93,10 @@ static ESL_OPTIONS options[] = {
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",    12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert input <seqfile> is in format <s>: no autodetection",    12 },
-  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
+  { "--cpu",        eslARG_INT,"0","HMMER_NCPU","n>=0",NULL,  NULL, CPUOPTS,            "number of parallel CPU workers to use for multithreads",       12 },  // multithread parallelization off by default. hmmscan is i/o bound on almost all systems.
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",              12 },  
   { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  MPIOPTS,         "run as an MPI parallel program",                               12 },
 #endif
@@ -130,17 +123,18 @@ static char banner[] = "search sequence(s) against a profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, P7_HMMFILE *hfp);
+
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif /*HAVE_MPI*/
+#endif
 
 /* process_commandline()
  * 
@@ -250,11 +244,14 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
     else if (                                  fprintf(ofp, "# random number seed set to:       %d\n",        esl_opt_GetInteger(go, "--seed"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# input seqfile format asserted:   %s\n",            esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+                                           
 #ifdef HMMER_THREADS
-  if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+  if (esl_opt_IsUsed(go, "--cpu")) {
+    if (esl_opt_GetInteger(go, "--cpu") == 0) { if (fprintf(ofp, "# multithread parallelization:     off\n")                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+    else                                      { if (fprintf(ofp, "# multithread parallelization:     %d workers\n", esl_opt_GetInteger(go, "--cpu")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+  }
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_IsUsed(go, "--mpi")       && fprintf(ofp, "# MPI:                             on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -284,7 +281,7 @@ main(int argc, char **argv)
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
    */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   /* pause the execution of the programs execution until the user has a
    * chance to attach with a debugger and send a signal to resume execution
    * i.e. (gdb) signal SIGCONT
@@ -304,7 +301,7 @@ main(int argc, char **argv)
       MPI_Finalize();
     }
   else
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
     {
       status = serial_master(go, &cfg);
     }
@@ -364,19 +361,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
-  /* validate options if running as a daemon */
-  if (esl_opt_IsOn(go, "--daemon")) {
-
-    /* running as a daemon, the input format must be type daemon */
-    if (seqfmt != eslSQFILE_UNKNOWN && seqfmt != eslSQFILE_DAEMON) 
-      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-    seqfmt = eslSQFILE_DAEMON;
-
-    if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
-  }
-
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -408,9 +394,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN( esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
   if (ncpus > 0)
     {
       threadObj = esl_threads_Create(&pipeline_thread);
@@ -419,7 +403,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
-  ESL_ALLOC(info, sizeof(*info) * infocnt);
+  ESL_ALLOC(info, (ptrdiff_t) sizeof(*info) * infocnt);
 
   for (i = 0; i < infocnt; ++i)
     {
@@ -447,7 +431,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
   
 #ifdef HMMER_THREADS
@@ -568,7 +552,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return status;
 }
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 
 /* Define common tags used by the MPI master/slave processes */
 #define HMMER_ERROR_TAG          1
@@ -777,7 +761,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   mpi_failure("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -833,7 +817,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (nquery > 1) list->current = 0;
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -1034,7 +1018,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   w = esl_stopwatch_Create();
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -1072,7 +1056,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       /* Create processing pipeline and hit list */
@@ -1170,7 +1154,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   return eslOK;
 }
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 static int
 serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
@@ -1179,7 +1163,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
   P7_OPROFILE   *om;
   ESL_ALPHABET  *abc = NULL;
-
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
     {
@@ -1187,7 +1170,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-      p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th);
+      if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
       p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(info->pli);
@@ -1271,29 +1255,30 @@ pipeline_thread(void *arg)
   /* loop until all blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
   while (block->count > 0)
-    {
+  {
       /* Main loop: */
-      for (i = 0; i < block->count; ++i)
-	{
-	  P7_OPROFILE *om = block->list[i];
+    for (i = 0; i < block->count; ++i)
+    {
+      P7_OPROFILE *om = block->list[i];
 
-	  p7_pli_NewModel(info->pli, om, info->bg);
-	  p7_bg_SetLength(info->bg, info->qsq->n);
-	  p7_oprofile_ReconfigLength(om, info->qsq->n);
+      p7_pli_NewModel(info->pli, om, info->bg);
+      p7_bg_SetLength(info->bg, info->qsq->n);
+      p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-	  p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th);
+      if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
-	  p7_oprofile_Destroy(om);
-	  p7_pipeline_Reuse(info->pli);
+      p7_oprofile_Destroy(om);
+      p7_pipeline_Reuse(info->pli);
 
-	  block->list[i] = NULL;
-	}
-
-      status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
-      if (status != eslOK) esl_fatal("Work queue worker failed");
-
-      block = (P7_OM_BLOCK *) newBlock;
+      block->list[i] = NULL;
     }
+
+    status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+    if (status != eslOK) esl_fatal("Work queue worker failed");
+
+    block = (P7_OM_BLOCK *) newBlock;
+  }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
@@ -1304,10 +1289,4 @@ pipeline_thread(void *arg)
 #endif   /* HMMER_THREADS */
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

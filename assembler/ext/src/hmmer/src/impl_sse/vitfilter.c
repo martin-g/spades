@@ -15,9 +15,8 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -119,7 +118,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   xC   = -32768;
   xE   = -32768;
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -231,7 +230,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  DMXo(0) = _mm_or_si128(dcv, negInfv);
 	}
 	  
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
@@ -355,7 +354,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   xC   = -32768;
   xE   = -32768;
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -486,7 +485,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
           DMXo(0) = _mm_or_si128(dcv, negInfv);
         }
       }
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
@@ -513,7 +512,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
    ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
    ./benchmark-vitfilter -N100 -x <hmmfile> compare scores to exact emulation
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -561,8 +560,8 @@ main(int argc, char **argv)
   float           sc1, sc2;
   double          base_time, bench_time, Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -704,7 +703,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
    gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_utest -Dp7VITFILTER_TESTDRIVE vitfilter.c -lhmmer -leasel -lm
    ./vitfilter_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -782,7 +781,7 @@ main(int argc, char **argv)
    gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_example -Dp7VITFILTER_EXAMPLE vitfilter.c -lhmmer -leasel -lm
    ./vitfilter_example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -827,8 +826,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
@@ -913,11 +912,4 @@ main(int argc, char **argv)
 #endif /*p7VITFILTER_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

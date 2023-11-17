@@ -1,6 +1,6 @@
 /* hmmemit: sample sequence(s) from a profile HMM.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,7 +90,7 @@ main(int argc, char **argv)
 
   r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
 
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
@@ -212,8 +212,8 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   p7_tracealign_Seqs(sq, tr, N, hmm->M, optflags, hmm, &msa);
   esl_msafile_Write(ofp, msa, outfmt);
   
-  for (i = 0; i < N; i++) p7_trace_Destroy(tr[i]);  free(tr);
-  for (i = 0; i < N; i++) esl_sq_Destroy(sq[i]);    free(sq);
+  for (i = 0; i < N; i++) { p7_trace_Destroy(tr[i]); } free(tr);
+  for (i = 0; i < N; i++) { esl_sq_Destroy(sq[i]);   } free(sq);
   esl_msa_Destroy(msa);
   return;
 }
@@ -271,7 +271,3 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
 }
 
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

@@ -5,8 +5,6 @@
  *   2. Benchmark driver.
  *   3. Unit tests.
  *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information.
  *
  * See p7_domaindef.c -- null3 correction of per-seq and per-domain
  * scores is embedded within p7_domaindef's logic; we split it out
@@ -15,10 +13,8 @@
  * Approach is based heavily on the null3 approach used in Infernal,
  * and described in its user guide, specifically based on
  * ScoreCorrectionNull3CompUnknown()
- *
- * SVN $Id: null3.c 3474 2011-02-17 13:25:32Z wheelert $
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -141,7 +137,7 @@ p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int st
                  -----------------    ------------------     -------------------
    21 Aug 2008    7.77u (185 Mc/s)     14.13u (192 Mc/s)     139.03u (165.6 Mc/s)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -185,8 +181,8 @@ main(int argc, char **argv)
   float           fsc, bsc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
@@ -269,7 +265,7 @@ utest_correct_normalization(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, ESL_DS
 /* gcc -o null2_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7NULL2_TESTDRIVE null2.c -lhmmer -leasel -lm
  * ./null2_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -339,18 +335,4 @@ main(int argc, char **argv)
 /*-------------------- end, test driver -------------------------*/
 
 
-
-/*****************************************************************
- * 5. Example
- *****************************************************************/
-#ifdef p7_NULL3_EXAMPLE
-
-#endif /*p7_NULL3_EXAMPLE*/
-/*------------------------ example ------------------------------*/
-
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 

@@ -1,6 +1,6 @@
 /* nhmmscan: search sequence(s) against a profile HMM database, using nhmmer pipeline
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,16 +45,13 @@ typedef struct {
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
 
-//#define DAEMONOPTS  "-o,--tblout,--domtblout"
-
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                          1 },
   /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                         2 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",         2 },
-  { "--dfamtblout", eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of hits to file, in Dfam format <f>",               2 },
-  { "--aliscoresout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,               "save of scores for each position in each alignment to <f>",    2 },
+  { "--dfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits to file, in Dfam format <f>",                2 },
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                        2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                 2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                          2 },
@@ -82,12 +79,13 @@ static ESL_OPTIONS options[] = {
   { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,             "turn off biased composition score corrections",                12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,             "set # of comparisons done, for E-value calculation",           12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,             "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
-  { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,           NULL,    "tail mass at which window length is determined",               12 },
-  { "--w_length",   eslARG_INT,     NULL, NULL, NULL,    NULL,  NULL,           NULL,    "window length - essentially max expected hit length ",                                                12 },
-  { "--watson",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--crick",  "only search the top strand",                                    12 },
-  { "--crick",      eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--watson",  "only search the bottom strand",                                 12 },
-
-
+  { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,  NULL,             "tail mass at which window length is determined",               12 },
+  { "--w_length",   eslARG_INT,     NULL, NULL, NULL,    NULL,  NULL,  NULL,             "window length - essentially max expected hit length ",         12 },
+  { "--watson",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,"--crick",          "only search the top strand",                                   12 },
+  { "--crick",      eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,"--watson",         "only search the bottom strand",                                12 },
+#ifdef HMMER_THREADS
+  { "--cpu",        eslARG_INT, "0","HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,          "number of parallel CPU workers to use for multithreads",        12 },  // off by default.
+#endif
 
   /* stage-specific window length used for bias composition estimate,
    * hidden because they are confusing/expert options. May drag them out
@@ -100,20 +98,12 @@ static ESL_OPTIONS options[] = {
   /* expert-only option (for now), hidden from view, for altering bg probs.  May not keep. */
   { "--bgfile",     eslARG_INFILE,       NULL, NULL, NULL,    NULL,  NULL,   NULL,           "override default background probs with values in file <f>",    99 },
 
-
   /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",            99 },
   { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "report domains >= this score cutoff in output",                 99 },
   { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",     99 },
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",       99 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,           "set # of significant seqs, for domain E-value calculation",      99 },
-
-//  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
-
-
-  #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
-#endif
+  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",     99 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -222,8 +212,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (fprintf(ofp, "# target HMM database:             %s\n", hmmfile)                                                                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-o")          && fprintf(ofp, "# output directed to file:         %s\n",            esl_opt_GetString(go, "-o"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tblout")    && fprintf(ofp, "# per-seq hits tabular output:     %s\n",            esl_opt_GetString(go, "--tblout"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--dfamtblout")    && fprintf(ofp, "# hits output in Dfam format:      %s\n",            esl_opt_GetString(go, "--dfamtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--aliscoresout")  && fprintf(ofp, "# alignment scores output:         %s\n",            esl_opt_GetString(go, "--aliscoresout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--dfamtblout")&& fprintf(ofp, "# hits output in Dfam format:      %s\n",            esl_opt_GetString(go, "--dfamtblout"))< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--acc")       && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -261,9 +250,11 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# input seqfile format asserted:   %s\n",            esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-//  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #ifdef HMMER_THREADS
-  if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+ if (esl_opt_IsUsed(go, "--cpu")) {
+    if (esl_opt_GetInteger(go, "--cpu") == 0) { if (fprintf(ofp, "# multithread parallelization:     off\n")                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+    else                                      { if (fprintf(ofp, "# multithread parallelization:     %d workers\n", esl_opt_GetInteger(go, "--cpu")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+  }
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
@@ -306,10 +297,9 @@ main(int argc, char **argv)
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  FILE            *ofp      = stdout;	         /* output file for results (default stdout)        */
-  FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)    */
-  FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)    */
-  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
+  FILE            *ofp      = stdout;	         // output file for results (default stdout)
+  FILE            *tblfp    = NULL;		 // output stream for tabular per-seq (--tblout)
+  FILE            *dfamtblfp= NULL;              // output stream for tabular Dfam format (--dfamtblout)
 
   P7_BG           *bg_manual  = NULL;
 
@@ -355,18 +345,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
-  /* validate options if running as a daemon */
-//  if (esl_opt_IsOn(go, "--daemon")) {
-    /* running as a daemon, the input format must be type daemon */
-//    if (seqfmt != eslSQFILE_UNKNOWN && seqfmt != eslSQFILE_DAEMON)
-//      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-//    seqfmt = eslSQFILE_DAEMON;
-
-//    if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
-//  }
-
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -376,6 +356,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if      (hstatus == eslEFORMAT)   p7_Fail("bad format, binary auxfiles, %s:\n%s",     cfg->hmmfile, hfp->errbuf);
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
+
+  if (om->max_length == -1) p7_Fail("No MAXL field in model(s); is this an old model format?\nnhmmer/hmmscan require HMMER 3.1 models or later.");
 
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);
@@ -394,16 +376,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
-  if (esl_opt_IsOn(go, "--dfamtblout"))    { if ((dfamtblfp    = fopen(esl_opt_GetString(go, "--dfamtblout"),"w"))    == NULL)  esl_fatal("Failed to open tabular dfam output file %s for writing\n", esl_opt_GetString(go, "--dfamtblout")); }
-  if (esl_opt_IsOn(go, "--aliscoresout"))  { if ((aliscoresfp  = fopen(esl_opt_GetString(go, "--aliscoresout"),"w")) == NULL)  esl_fatal("Failed to open alignment scores output file %s for writing\n", esl_opt_GetString(go, "--aliscoresout")); }
+  if (esl_opt_IsOn(go, "--dfamtblout")){ if ((dfamtblfp= fopen(esl_opt_GetString(go, "--dfamtblout"),"w")) == NULL)  esl_fatal("Failed to open tabular dfam output file %s for writing\n",    esl_opt_GetString(go, "--dfamtblout")); }
  
   output_header(ofp, go, cfg->hmmfile, cfg->seqfile);
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
   if (ncpus > 0)
     {
       threadObj = esl_threads_Create(&pipeline_thread);
@@ -418,7 +397,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
-  ESL_ALLOC(info, sizeof(*info) * infocnt);
+  ESL_ALLOC(info, (ptrdiff_t) sizeof(*info) * infocnt);
 
   for (i = 0; i < infocnt; ++i)
   {
@@ -457,7 +436,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
   
 #ifdef HMMER_THREADS
@@ -492,9 +471,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
         info[i].fwd_emissions = NULL;
 
-        #ifdef HMMER_THREADS
+#ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
-        #endif
+#endif
       }
 
 #ifdef HMMER_THREADS
@@ -548,7 +527,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < info->th->N; i++) {
           if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
               info->pli->n_output++;
-              info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+              info->pli->pos_output += 1 + (info->th->hit[i]->dcl[0].jali > info->th->hit[i]->dcl[0].iali ? info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali : info->th->hit[i]->dcl[0].iali - info->th->hit[i]->dcl[0].jali) ;
           }
       }
 
@@ -560,8 +539,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
       if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   qsq->name, NULL, info->th, info->pli);
-      if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, qsq->name, info->th );
-
 
       esl_stopwatch_Stop(w);
       info->pli->nseqs = 1;
@@ -584,8 +561,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Terminate outputs - any last words?
    */
-  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmscan", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
-  if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+  if (tblfp)  p7_tophits_TabularTail(tblfp, "nhmmscan", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
+  if (ofp)    { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
   /* Cleanup - prepare for successful exit
    */
@@ -606,22 +583,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
-  ERROR:
-
+ ERROR:
   p7_bg_Destroy(bg_manual);
-
-  if (info!=NULL) free(info);
-
-  if (qsq!=NULL)  esl_sq_Destroy(qsq);
-  if (w!=NULL)    esl_stopwatch_Destroy(w);
-  if (abc!=NULL)  esl_alphabet_Destroy(abc);
-  if (sqfp!=NULL) esl_sqfile_Close(sqfp);
+  if (info) free(info);
+  if (qsq)  esl_sq_Destroy(qsq);
+  if (w)    esl_stopwatch_Destroy(w);
+  if (abc)  esl_alphabet_Destroy(abc);
+  if (sqfp) esl_sqfile_Close(sqfp);
 
   if (ofp != stdout) fclose(ofp);
   if (tblfp)         fclose(tblfp);
   if (dfamtblfp)     fclose(dfamtblfp);
-  if (aliscoresfp)   fclose(aliscoresfp);
-
   return status;
 }
 
@@ -636,9 +608,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   P7_OPROFILE   *om        = NULL;
   P7_SCOREDATA  *scoredata = NULL;   /* hmm-specific data used by nhmmer */
   ESL_ALPHABET  *abc = NULL;
-
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
+
   if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
     esl_sq_Copy(info->qsq,sq_revcmp);
@@ -646,8 +617,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
     info->pli->nres += info->qsq->n;
   }
-#endif /*eslAUGMENT_ALPHABET*/
-
 
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
@@ -675,19 +644,20 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
       scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
-#ifdef eslAUGMENT_ALPHABET
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        if (status != eslOK) p7_Fail(info->pli->errbuf);
+
         p7_pipeline_Reuse(info->pli); // prepare for next search
         seq_len = info->qsq->n;
       }
-#endif
-
 
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        if (status != eslOK) p7_Fail(info->pli->errbuf);
+
         p7_pipeline_Reuse(info->pli);
         seq_len += info->qsq->n;
       }
@@ -704,22 +674,13 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
       p7_oprofile_Destroy(om);
       p7_hmm_ScoreDataDestroy(scoredata);
-
-
-
-
   }
 
   esl_alphabet_Destroy(abc);
-#ifdef eslAUGMENT_ALPHABET
   esl_sq_Destroy(sq_revcmp);
-#endif
-
-  if (info->fwd_emissions != NULL) free(info->fwd_emissions);
-
+  if (info->fwd_emissions) free(info->fwd_emissions);
 
 ERROR:
-
   return status;
 }
 
@@ -788,11 +749,7 @@ pipeline_thread(void *arg)
 
   int seq_len = 0;
   int prev_hit_cnt = 0;
-
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
-#endif /*eslAUGMENT_ALPHABET*/
-  
 
   impl_Init();
 
@@ -804,7 +761,6 @@ pipeline_thread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
-#ifdef eslAUGMENT_ALPHABET
   //reverse complement
   if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
@@ -812,8 +768,6 @@ pipeline_thread(void *arg)
     esl_sq_ReverseComplement(sq_revcmp);
     info->pli->nres += info->qsq->n;
   }
-#endif /*eslAUGMENT_ALPHABET*/
-
 
   /* loop until all blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
@@ -846,18 +800,20 @@ pipeline_thread(void *arg)
 
         scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
-
-#ifdef eslAUGMENT_ALPHABET
         //reverse complement
         if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
         {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          if (status != eslOK) p7_Fail(info->pli->errbuf);
+
           p7_pipeline_Reuse(info->pli); // prepare for next search
           seq_len = info->qsq->n;
         }
-#endif
+
         if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          if (status != eslOK) p7_Fail(info->pli->errbuf);
+
           p7_pipeline_Reuse(info->pli);
           seq_len += info->qsq->n;
         }
@@ -883,10 +839,8 @@ pipeline_thread(void *arg)
       block = (P7_OM_BLOCK *) newBlock;
   }
 
-#ifdef eslAUGMENT_ALPHABET
-  esl_sq_Destroy(sq_revcmp);
-#endif
 
+  esl_sq_Destroy(sq_revcmp);
   if (info->fwd_emissions != NULL) free(info->fwd_emissions);
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
@@ -897,19 +851,9 @@ pipeline_thread(void *arg)
 
 
 ERROR:
-
   esl_fatal("Error allocating memory in work queue");
   return;
-
-
 }
 #endif   /* HMMER_THREADS */
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id: hmmscan.c 3976 2012-04-03 12:09:10Z eddys $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/nhmmscan.c $
- *****************************************************************/
 

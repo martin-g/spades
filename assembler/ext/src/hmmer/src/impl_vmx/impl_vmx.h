@@ -2,16 +2,14 @@
  * routines: structures, declarations, and macros.
  * 
  * SRE, Sun Nov 25 11:23:02 2007
- * SVN $Id$
  */
 #ifndef P7_IMPL_VMX_INCLUDED
 #define P7_IMPL_VMX_INCLUDED
+#include <p7_config.h>
 
 #ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
 #endif
-
-#include "p7_config.h"
 
 #include "esl_alphabet.h"
 #include "esl_random.h"
@@ -190,7 +188,7 @@ typedef struct p7_omx_s {
   int       allocQ4;		/* current set row width in <dpf> quads:   allocQ4*4 >= M      */
   int       allocQ8;		/* current set row width in <dpw> octets:  allocQ8*8 >= M      */
   int       allocQ16;		/* current set row width in <dpb> 16-mers: allocQ16*16 >= M    */
-  size_t    ncells;		/* current allocation size of <dp_mem>, in accessible cells    */
+  int64_t   ncells;		/* current allocation size of <dp_mem>, in accessible cells    */
 
   /* The X states (for full,parser; or NULL, for scorer)                                       */
   float    *xmx;        	/* logically [0.1..L][ENJBCS]; indexed [i*p7X_NXCELLS+s]       */
@@ -271,6 +269,8 @@ extern size_t       p7_oprofile_Sizeof(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Copy(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Clone(const P7_OPROFILE *om);
 extern int          p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
+extern int          p7_oprofile_UpdateVitEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
+extern int          p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);
@@ -352,13 +352,9 @@ static inline void
 impl_ThreadInit(void)
 {
 }
-  
-
 #endif /* P7_IMPL_VMX_INCLUDED */
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
 
 /* 
  * Currently (and this remains in flux as of 14 Dec 07) an optimized

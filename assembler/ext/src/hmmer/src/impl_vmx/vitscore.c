@@ -17,12 +17,10 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  *   
  * SRE, Sun Aug  3 13:10:24 2008 [St. Louis]
- * SVN $Id$
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -101,7 +99,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   xJ   = -eslINFINITY;
   xC   = -eslINFINITY;
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->debugging) p7_omx_DumpFloatRow(ox, FALSE, 0, 5, 2, xE, xN, xJ, xB, xC); /* logify=FALSE, <rowi>=0, width=5, precision=2*/
 #endif
 
@@ -206,7 +204,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  DMXo(0) = dcv;
 	}
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->debugging) p7_omx_DumpFloatRow(ox, FALSE, i, 5, 2, xE, xN, xJ, xB, xC); /* logify=FALSE, <rowi>=i, width=5, precision=2*/
 #endif
     } /* end loop over sequence residues 1..L */
@@ -235,7 +233,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   ./benchmark-vitscore -N100 -c <hmmfile>   compare scores to generic impl
   ./benchmark-vitscore -N100 -x <hmmfile>   equate scores to exact emulation
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -282,8 +280,8 @@ main(int argc, char **argv)
   float           sc1, sc2;
   double          base_time, bench_time, Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -397,7 +395,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
    gcc -g -Wall -maltivec -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitscore_utest -Dp7VITSCORE_TESTDRIVE vitscore.c -lhmmer -leasel -lm
    ./vitscore_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -469,7 +467,7 @@ main(int argc, char **argv)
    gcc -g -Wall -maltivec -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7VITSCORE_EXAMPLE vitscore.c -lhmmer -leasel -lm
    ./example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -499,8 +497,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
@@ -553,6 +551,3 @@ main(int argc, char **argv)
 #endif /*p7VITSCORE_EXAMPLE*/
 /*-------------------------- end, example ------------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/ 

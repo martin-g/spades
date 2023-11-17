@@ -1,12 +1,11 @@
 /* A cached profile database. Used by the hmmpgmd daemon.
  * 
  * Contents:
- *   x. P7_HMMCACHE : a daemon's cached profile database.
- *   x. Benchmark driver.
- *   x. Unit tests.
- *   x. License and copyright information
+ *   1. P7_HMMCACHE : a daemon's cached profile database.
+ *   2. Benchmark driver.
+ *   3. Unit tests.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -66,11 +65,12 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
   if ( ( status = esl_strdup(hmmfile, -1, &cache->name) != eslOK)) goto ERROR; 
   ESL_ALLOC(cache->list, sizeof(P7_OPROFILE *) * cache->lalloc);
 
-  if ( (status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT 
+  if ( (status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT 
 
   while ((status = p7_oprofile_ReadMSV(hfp, &(cache->abc), &om)) == eslOK) /* eslEFORMAT | eslEINCOMPAT */
     {
-      if (( status = p7_oprofile_ReadRest(hfp, om)) != eslOK) break; /* eslEFORMAT */
+      if (( status = p7_oprofile_ReadRest(hfp, om)) != eslOK)
+        { strncpy(errbuf, hfp->rr_errbuf, eslERRBUFSIZE); goto ERROR; }
 
       if (cache->n >= cache->lalloc) {
 	ESL_REALLOC(cache->list, sizeof(char *) * cache->lalloc * 2);
@@ -171,7 +171,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
  *****************************************************************/
 #ifdef p7HMMCACHE_BENCHMARK
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -224,9 +224,3 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

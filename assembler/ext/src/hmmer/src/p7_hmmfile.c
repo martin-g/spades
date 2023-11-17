@@ -10,9 +10,8 @@
  *     7. Unit tests.
  *     8. Test driver.
  *     9. Example.
- *    10. Copyright and license.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,16 +65,10 @@ static float h2ascii2prob(char *s, float null);
  * 1. The P7_HMMFILE object for reading HMMs.
  *****************************************************************/
 
-/* Historical note:
- * p7_hmmfile_Open() is deprecated;
- * p7_hmmfile_OpenE() is the newer replacement, which includes
- * better error reporting through a <errbuf>.
- */
-
 static int open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf);
 
 
-/* Function:  p7_hmmfile_OpenE()
+/* Function:  p7_hmmfile_Open()
  * Synopsis:  Open an HMM file <filename>. 
  *
  * Purpose:   Open an HMM file <filename>, and prepare to read the first
@@ -118,91 +111,46 @@ static int open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, in
  *            <eslEFORMAT> if <filename> is not in a recognized HMMER
  *            HMM file format.
  *            
- *            On either type of error, if a non-NULL <errbuf> was provided,
+ *            On all types of error, if a non-NULL <errbuf> was provided,
  *            a useful user error message is left in it.
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_OpenE(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
+p7_hmmfile_Open(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
-  return open_engine(filename, env, ret_hfp, FALSE, errbuf);
+  return open_engine(filename, env, ret_hfp, /*do_ascii_only=*/FALSE, errbuf);
 }
-
-
-/* Function:  p7_hmmfile_Open()
- * Synopsis:  Open an HMM file. (Deprecated version with less error handling)
- *
- * Purpose:   Same as <p7_hmmfile_OpenE()>, above, but without the <errbuf>.
- *            This older version is now deprecated. Use <p7_hmmfile_OpenE()>.
- *            
- *            When we have squashed out all usage of legacy <p7_hmmfile_Open()>,
- *            <OpenE()> will become <Open()>.
- */
-int
-p7_hmmfile_Open(const char *filename, char *env, P7_HMMFILE **ret_hfp)
-{
-  return open_engine(filename, env, ret_hfp, FALSE, NULL);
-}
-
-/* Function:  p7_hmmfile_OpenENoDB()
- * Synopsis:  Open only an HMM flatfile, even if pressed db exists.
- *
- * Purpose:   Same as <p7_hmmfile_OpenE()> except that if a pressed
- *            database exists for <filename>, it is ignored. Only
- *            <filename> itself is opened.
- *            
- *            hmmpress needs this call. Otherwise, it opens a press'ed
- *            database that it may be about to overwrite.
- */
-int
-p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
-{
-  return open_engine(filename, env, ret_hfp, TRUE, errbuf);
-}
-
 
 
 /* Function:  p7_hmmfile_OpenNoDB()
- * Synopsis:  Open only an HMM flatfile, even if pressed db exists. (Deprecated)
+ * Synopsis:  Open only an HMM flatfile, even if pressed db exists. 
  *
- * Purpose:   Same as <p7_hmmfile_OpenENoDB()>, 
+ * Purpose:   Same as <p7_hmmfile_Open()>, except that if a pressed 
  *            database exists for <filename>, it is ignored. Only
  *            <filename> itself is opened.
  *            
- *            hmmpress needs this call. Otherwise, it opens a press'ed
- *            database that it may be about to overwrite.
+ *            hmmpress needs this call. Otherwise, it would open a
+ *            press'ed database that it may be about to overwrite.
  */
 int
-p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
-  return open_engine(filename, env, ret_hfp, TRUE, NULL);
+  return open_engine(filename, env, ret_hfp, /*do_ascii_only=*/TRUE, errbuf);
 }
 
 
 /* Function:  p7_hmmfile_OpenBuffer()
  *
- * Purpose:   Perparse a buffer containing an ascii HMM for parsing.
+ * Purpose:   Like p7_hmmfile_Open(), but we're going to parse 
+ *            a buffer containing ASCII HMM file format.
  *            
- *            As another special case, if <filename> ends in a <.gz>
- *            suffix, the file is assumed to be compressed by GNU
- *            <gzip>, and it is opened for reading from a pipe with
- *            <gunzip -dc>. This feature is only available on
- *            POSIX-compliant systems that have a <popen()> call, and
- *            <HAVE_POPEN> is defined by the configure script at
- *            compile time. 
- *            
- * Args:      filename - HMM file to open; or "-" for <stdin>
- *            env      - list of paths to look for <hmmfile> in, in 
- *                       addition to current working dir; or <NULL>
+ * Args:      buffer   - buffer to "open". Not necessarily NUL-terminated.
+ *            size     - length of buffer in chars
  *            ret_hfp  - RETURN: opened <P7_HMMFILE>.
  *
  * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
  *            in <*ret_hfp>.
- *            
- *            <eslENOTFOUND> if <filename> can't be opened for
- *            reading, even after the list of directories in <env> (if
- *            any) is checked.
  *            
  *            <eslEFORMAT> if <filename> is not in a recognized HMMER
  *            HMM file format.
@@ -210,7 +158,7 @@ p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp)
 {
   P7_HMMFILE *hfp     = NULL;
   int         status;
@@ -233,6 +181,7 @@ p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
   hfp->pfp          = NULL;
   hfp->ssi          = NULL;
   hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if ((hfp->efp = esl_fileparser_CreateMapped(buffer, size))         == NULL)   { status = eslEMEM; goto ERROR; }
   if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  goto ERROR;
@@ -262,9 +211,8 @@ p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
 
 /* open_engine()
  *
- * Implements all of the file opening functions:
- * <p7_hmmfile_Open()>, <p7_hmmfile_OpenE()>, <p7_hmmfile_OpenNoDB()>, 
- * and <p7_OpenENoDB()>.
+ * Implements the meat of the file opening functions
+ * <p7_hmmfile_Open()> and <p7_hmmfile_OpenNoDB()>.
  * See their comments above.
  * 
  * Only returns three types of errors: 
@@ -282,7 +230,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
   char       *dbfile   = NULL;  /* constructed name of an index or binary db file */
   char       *cmd      = NULL;  /* constructed gzip -dc pipe command              */
   int         status;
-  int         n       = strlen(filename);
+  int         n        = strlen(filename);
   union { char c[4]; uint32_t n; } magic;
   char       *tok;
   int         toklen;
@@ -303,6 +251,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
   hfp->pfp          = NULL;
   hfp->ssi          = NULL;
   hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   /* 1. There's two special reading modes that have limited indexing
    *    and optimization capability: reading from standard input, and 
@@ -319,7 +268,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
 #ifdef HAVE_POPEN
   else if (n > 3 && strcmp(filename+n-3, ".gz") == 0) /* a <*.gz> filename means read via gunzip pipe */
   {
-    if (! esl_FileExists(filename))                                    ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
+    if (! esl_FileExists(filename))                                     ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
     if ((status = esl_sprintf(&cmd, "gzip -dc %s", filename)) != eslOK) ESL_XFAIL(status,       errbuf, "when setting up .gz pipe: esl_sprintf() failed");
     if ((hfp->f = popen(cmd, "r")) == NULL)                             ESL_XFAIL(eslENOTFOUND, errbuf, "gzip -dc %s failed; gzip not installed or not in PATH?", filename);
     if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)     ESL_XFAIL(status,       errbuf, "esl_strdup() failed, shouldn't happen");
@@ -535,9 +484,9 @@ p7_hmmfile_CreateLock(P7_HMMFILE *hfp)
  * 2. Writing HMMER3 HMM files.
  *****************************************************************/
 static int multiline(FILE *fp, const char *pfx, char *s);
-static int multilineString(char **str, const char *pfx, char *s, int *offset);
+static int multilineString(char *str, int size, const char *pfx, char *s, int *offset);
 static int printprob(FILE *fp, int fieldwidth, float p);
-static int probToString(char **str , int fieldwidth, float p, int offset);
+static int probToString(char *str, int size, int fieldwidth, float p, int offset);
 
 /* Function:  p7_hmmfile_WriteASCII()
  * Synopsis:  Write a HMMER3 ASCII save file.
@@ -648,10 +597,13 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
     else                      { if (fprintf(fp, " %6s", "-")         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
 
     if (format >= p7_HMMFILE_3e) {
-      x = hmm->consensus[k];
       if (format >= p7_HMMFILE_3f && (hmm->flags & p7H_MMASK) && hmm->mm[k] == 'm' )
         x = tolower(hmm->abc->sym[hmm->abc->Kp-3]);
-      if (fprintf(fp, " %c",   (hmm->flags & p7H_CONS) ? x : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      else if (hmm->flags & p7H_CONS)
+        x = hmm->consensus[k];
+      else
+        x = '-';
+      if (fprintf(fp, " %c", x) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     }
 
 
@@ -716,7 +668,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
 
   if (format == -1) format = p7_HMMFILE_3f;
 
-  /* In this block of code, interogate the HMM to work out the amount of memory needed to write it out as an ASCII string */
+  /* In this block of code, interrogate the HMM to work out the amount of memory needed to write it out as an ASCII string */
   /* The number in each row is the number of fixed chars, inlcuding the '\n' */
 
   /* The header block containing the tag/value pairs */
@@ -724,8 +676,8 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   size += 7 + strlen(hmm->name);                                                                            /* NAME line */
   size += (hmm->acc ?  ( 7 + strlen(hmm->acc)) : 0);                                                        /* ACC line, if present */
   size += (hmm->desc ?  ( 7 + strlen(hmm->desc)) : 0);                                                      /* DESC line, if present */
-  size += 7 + sprintf(buff, "%d", hmm->M);                                                                  /*LENG tag, we determine size of field later */
-  size += ((format >= p7_HMMFILE_3c && hmm->max_length) ?  7  + sprintf(buff, "%d", hmm->max_length) : 0);  /*MAXL line, later formats only, optional */
+  size += 7 + snprintf(buff, 100, "%d", hmm->M);                                                            /*LENG tag, we determine size of field later */
+  size += ((format >= p7_HMMFILE_3c && hmm->max_length) ?  7  + snprintf(buff, 100, "%d", hmm->max_length) : 0);  /*MAXL line, later formats only, optional */
   size += 7 + strlen( esl_abc_DecodeType(hmm->abc->type));                                                  /*ALPH tag */
   size += 10;                                                                                               /*RF tag, yes/no */
   size += (format >= p7_HMMFILE_3f ?  10  : 0 );                                                            /*MM line, only later formats*/
@@ -743,28 +695,28 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
       end = strchr(sptr, '\n');
       sptr += (end - sptr) +1;
     } while (end != NULL  && *sptr != '\0');
-    size += ((sprintf(buff, "%d", n) + 8) * n); /*length of all the COM tags*/
+    size += ((snprintf(buff, 100, "%d", n) + 8) * n); /*length of all the COM tags*/
     size += strlen(hmm->comlog);
   }
 
-  size += (hmm->nseq  > 0 ? 7  + sprintf(buff, "%d", hmm->nseq) : 0);                                      /* NSEQ line */
-  size += (hmm->eff_nseq  >= 0 ? 7  + sprintf(buff, "%f", hmm->eff_nseq) : 0);                              /* EFFN line */
-  size += (hmm->flags & p7H_CHKSUM ? 7 + sprintf(buff, "%u", hmm->checksum) : 0);                           /*CKSUM line */
+  size += (hmm->nseq  > 0 ? 7  + snprintf(buff, 100, "%d", hmm->nseq) : 0);                    /* NSEQ line */
+  size += (hmm->eff_nseq  >= 0 ? 7  + snprintf(buff, 100, "%f", hmm->eff_nseq) : 0);           /* EFFN line */
+  size += (hmm->flags & p7H_CHKSUM ? 7 + snprintf(buff, 100, "%u", hmm->checksum) : 0);        /*CKSUM line */
 
   /* Thresholds section */
-  size += ((hmm->flags & p7H_GA) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_GA1])+sprintf(buff, "%.2f", hmm->cutoff[p7_GA2]) : 0);
-  size += ((hmm->flags & p7H_TC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_TC1])+sprintf(buff, "%.2f", hmm->cutoff[p7_TC2]) : 0);
-  size += ((hmm->flags & p7H_NC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_NC1])+sprintf(buff, "%.2f", hmm->cutoff[p7_NC2]) : 0);
+  size += ((hmm->flags & p7H_GA) ? 8 + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_GA1]) + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_GA2]) : 0);
+  size += ((hmm->flags & p7H_TC) ? 8 + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_TC1]) + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_TC2]) : 0);
+  size += ((hmm->flags & p7H_NC) ? 8 + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_NC1]) + snprintf(buff, 100, "%.2f", hmm->cutoff[p7_NC2]) : 0);
 
   /* E-value stats */
   size += ((hmm->flags & p7H_STATS) ?
-             ((format == p7_HMMFILE_3a) ? ( 75 + sprintf(buff, "%f", hmm->evparam[p7_MLAMBDA]) +
-                                                 sprintf(buff, "%f", hmm->evparam[p7_MMU])     +
-                                                 sprintf(buff, "%f", hmm->evparam[p7_FTAU])) :
-                                          ( 75 + sprintf(buff, "%8.4f", hmm->evparam[p7_MMU])  + sprintf(buff, "%8.5f", hmm->evparam[p7_MLAMBDA]) +
-                                                 sprintf(buff, "%8.4f", hmm->evparam[p7_VMU])  + sprintf(buff, "%8.5f", hmm->evparam[p7_VLAMBDA]) +
-                                                 sprintf(buff, "%8.4f", hmm->evparam[p7_FTAU]) + sprintf(buff, "%8.5f", hmm->evparam[p7_FLAMBDA])))
-             : 0); /* No STATS */
+           ((format == p7_HMMFILE_3a) ? ( 75 + snprintf(buff, 100, "%f", hmm->evparam[p7_MLAMBDA]) +
+                                               snprintf(buff, 100, "%f", hmm->evparam[p7_MMU])     +
+                                               snprintf(buff, 100, "%f", hmm->evparam[p7_FTAU])) :
+                                        ( 75 + snprintf(buff, 100, "%8.4f", hmm->evparam[p7_MMU])  + snprintf(buff, 100, "%8.5f", hmm->evparam[p7_MLAMBDA]) +
+                                               snprintf(buff, 100, "%8.4f", hmm->evparam[p7_VMU])  + snprintf(buff, 100, "%8.5f", hmm->evparam[p7_VLAMBDA]) +
+                                               snprintf(buff, 100, "%8.4f", hmm->evparam[p7_FTAU]) + snprintf(buff, 100, "%8.5f", hmm->evparam[p7_FLAMBDA])))
+                                      : 0); /* No STATS */
 
   /* Now on to the body of the HMM */
   size += 9  + (hmm->abc->K * 9);                                   /* Alphabet labels */
@@ -787,225 +739,224 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   /* If anything fails, return an eslEWRITE error */
 
   /* Header block */
-  if      (format == p7_HMMFILE_3f)  { if ((offset = sprintf(ret_hmm, "HMMER3/f [%s | %s]\n",  HMMER_VERSION, HMMER_DATE))                              < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3e)  { if ((offset = sprintf(ret_hmm, "HMMER3/e [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3d)  { if ((offset = sprintf(ret_hmm, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3c)  { if ((offset = sprintf(ret_hmm, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3b)  { if ((offset = sprintf(ret_hmm, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3a)  { if ((offset = sprintf(ret_hmm, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
+  if      (format == p7_HMMFILE_3f)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/f [%s | %s]\n",  HMMER_VERSION, HMMER_DATE))                              < 0) return eslEWRITE; }
+  else if (format == p7_HMMFILE_3e)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/e [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
+  else if (format == p7_HMMFILE_3d)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
+  else if (format == p7_HMMFILE_3c)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
+  else if (format == p7_HMMFILE_3b)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
+  else if (format == p7_HMMFILE_3a)  { if ((offset = snprintf(ret_hmm, size, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
   else return eslEINVAL;
   coffset = offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "NAME  %s\n", hmm->name))                              < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "NAME  %s\n", hmm->name)) < 0) return eslEWRITE;
   coffset += offset;
 
   if (hmm->acc){
-    if((offset = sprintf(ret_hmm + coffset, "ACC   %s\n", hmm->acc))                              < 0) return eslEWRITE;
+    if((offset = snprintf(ret_hmm + coffset, size-coffset, "ACC   %s\n", hmm->acc)) < 0) return eslEWRITE;
     coffset += offset;
   }
 
   if (hmm->desc){
-    if ((offset = sprintf(ret_hmm + coffset, "DESC  %s\n", hmm->desc))                            < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "DESC  %s\n", hmm->desc)) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm + coffset, "LENG  %d\n", hmm->M))                                 < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "LENG  %d\n", hmm->M)) < 0) return eslEWRITE;
   coffset += offset;
 
   if (format >= p7_HMMFILE_3c && hmm->max_length > 0){
-    if((offset = sprintf(ret_hmm + coffset, "MAXL  %d\n", hmm->max_length))                       < 0) return eslEWRITE;
+    if((offset = snprintf(ret_hmm + coffset, size-coffset, "MAXL  %d\n", hmm->max_length)) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm + coffset, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type)))     < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type))) < 0) return eslEWRITE;
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm+coffset, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm+coffset, size-coffset, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no"))  < 0) return eslEWRITE;
   coffset += offset;
 
   if ((format >= p7_HMMFILE_3f)){
-    if ((offset = sprintf(ret_hmm+coffset, "MM    %s\n", (hmm->flags & p7H_MMASK) ? "yes" : "no"))  < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm+coffset, size-coffset, "MM    %s\n", (hmm->flags & p7H_MMASK) ? "yes" : "no"))  < 0) return eslEWRITE;
     coffset += offset;
   }
 
   if ((format >= p7_HMMFILE_3e)){
-    if((offset = sprintf(ret_hmm+coffset, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no")) < 0) return eslEWRITE;
+    if((offset = snprintf(ret_hmm+coffset, size-coffset, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no")) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm+coffset, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm+coffset, size-coffset, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no"))  < 0) return eslEWRITE;
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm+coffset, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm+coffset, size-coffset, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no"))  < 0) return eslEWRITE;
   coffset += offset;
 
-  if (hmm->ctime    != NULL){
-      if((offset = sprintf(ret_hmm + coffset, "DATE  %s\n", hmm->ctime))                          < 0) return eslEWRITE;
-      coffset += offset;
-  }
-
-  if (hmm->comlog   != NULL)   {
-    if ( (status = multilineString(&ret_hmm, "COM  ", hmm->comlog, &coffset)) != eslOK) return status; }
-
-
-  if (hmm->nseq   > 0){
-    if((offset = sprintf(ret_hmm + coffset, "NSEQ  %d\n", hmm->nseq))                            < 0) return eslEWRITE;
+  if (hmm->ctime) {
+    if((offset = snprintf(ret_hmm + coffset, size-coffset, "DATE  %s\n", hmm->ctime)) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if (hmm->eff_nseq   >= 0){
-    if((offset = sprintf(ret_hmm + coffset, "EFFN  %f\n", hmm->eff_nseq))                        < 0) return eslEWRITE;
+  if (hmm->comlog) {
+    if ( (status = multilineString(ret_hmm, size, "COM  ", hmm->comlog, &coffset)) != eslOK) return status;
+  }
+
+  if (hmm->nseq  > 0){
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "NSEQ  %d\n", hmm->nseq)) < 0) return eslEWRITE;
+    coffset += offset;
+  }
+
+  if (hmm->eff_nseq >= 0){
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "EFFN  %f\n", hmm->eff_nseq)) < 0) return eslEWRITE;
     coffset += offset;
   }
 
   if (hmm->flags & p7H_CHKSUM) {
-    if ((offset = sprintf  (ret_hmm + coffset, "CKSUM %u\n", hmm->checksum))                     < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "CKSUM %u\n", hmm->checksum)) < 0) return eslEWRITE;
     coffset += offset;
   } /* unsigned 32-bit */
 
 
   /* Thresholds */
-  if ((hmm->flags & p7H_GA)){
-    if(( offset = sprintf(ret_hmm + coffset , "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2])) < 0) return eslEWRITE;
+  if ((hmm->flags & p7H_GA)) {
+    if(( offset = snprintf(ret_hmm + coffset, size-coffset, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2])) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if ((hmm->flags & p7H_TC)){
-     if(( offset = sprintf(ret_hmm + coffset , "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2])) < 0) return eslEWRITE;
-     coffset += offset;
+  if ((hmm->flags & p7H_TC)) {
+    if (( offset = snprintf(ret_hmm + coffset, size-coffset, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2])) < 0) return eslEWRITE;
+    coffset += offset;
   }
 
-  if ((hmm->flags & p7H_NC)){
-     if(( offset = sprintf(ret_hmm + coffset , "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2])) < 0) return eslEWRITE;
-     coffset += offset;
+  if ((hmm->flags & p7H_NC)) {
+    if(( offset = snprintf(ret_hmm + coffset , size-coffset, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2])) < 0) return eslEWRITE;
+    coffset += offset;
   }
 
 
   /* E-value stats */
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a){
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]))                               < 0) return eslEWRITE;
+      if ((offset =snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]))   < 0) return eslEWRITE;
       coffset += offset;
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]))                                   < 0) return eslEWRITE;
+      if ((offset =snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]))       < 0) return eslEWRITE;
       coffset += offset;
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]))                                  < 0) return eslEWRITE;
+      if ((offset =snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]))      < 0) return eslEWRITE;
       coffset += offset;
     }else{
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]))  < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA])) < 0) return eslEWRITE;
       coffset += offset;
-      if ((offset = sprintf(ret_hmm + coffset, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA])) < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA])) < 0) return eslEWRITE;
       coffset += offset;
-      if ((offset = sprintf(ret_hmm + coffset, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA])) < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA])) < 0) return eslEWRITE;
       coffset += offset;
     }
   }
 
-
-
   /* HMM body */
-  if ((offset = sprintf(ret_hmm + coffset, "HMM     "))                         < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "HMM     "))  < 0) return eslEWRITE;
   coffset += offset;
 
   for (x = 0; x < hmm->abc->K; x++){
-    if ((offset = sprintf(ret_hmm + coffset, "     %c   ", hmm->abc->sym[x]))   < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "     %c   ", hmm->abc->sym[x]))   < 0) return eslEWRITE;
     coffset += offset;
   }
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if((offset = snprintf(ret_hmm + coffset, size-coffset, "\n")) < 0) return eslEWRITE;
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "        %8s %8s %8s %8s %8s %8s %8s\n",
-         "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d"))               < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset,
+                         "        %8s %8s %8s %8s %8s %8s %8s\n",
+                         "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d")) < 0) return eslEWRITE;
   coffset += offset;
 
   if (hmm->flags & p7H_COMPO) {
-    if ((offset = sprintf(ret_hmm + coffset, "  COMPO ")) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "  COMPO ")) < 0) return eslEWRITE;
       coffset += offset;
       for (x = 0; x < hmm->abc->K; x++){
-        if ( (status = probToString(&ret_hmm, 8, hmm->compo[x], coffset)) != eslOK) return status;
+        if ( (status = probToString(ret_hmm, size, 8, hmm->compo[x], coffset)) != eslOK) return status;
         coffset += 9;
       }
-   if((offset = sprintf(ret_hmm + coffset, "\n"))                               < 0) return eslEWRITE;
+      if((offset = snprintf(ret_hmm + coffset, size-coffset, "\n")) < 0) return eslEWRITE;
    coffset += offset;
   }
 
   /* node 0 is special: insert emissions, and B-> transitions */
-  if ((offset = sprintf(ret_hmm + coffset, "        "))                         < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "        ")) < 0) return eslEWRITE;
   coffset += offset;
   for (x = 0; x < hmm->abc->K; x++){
-    if ( (status = probToString(&ret_hmm, 8, hmm->ins[0][x], coffset)) != eslOK) return status;
+    if ( (status = probToString(ret_hmm, size, 8, hmm->ins[0][x], coffset)) != eslOK) return status;
     coffset += 9;
   }
 
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "\n")) < 0) return eslEWRITE;
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "        "))                         < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "        ")) < 0) return eslEWRITE;
   coffset += offset;
   for (x = 0; x <  p7H_NTRANSITIONS; x++){
-    if ( (status = probToString(&ret_hmm, 8, hmm->t[0][x], coffset)) != eslOK)  return status;
+    if ( (status = probToString(ret_hmm, size, 8, hmm->t[0][x], coffset)) != eslOK)  return status;
     coffset += 9;
   }
 
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if ((offset = snprintf(ret_hmm + coffset, size-coffset, "\n")) < 0) return eslEWRITE;
   coffset += offset;
 
 
   for (k = 1; k <= hmm->M; k++) {
     /* Line 1: k; match emissions; optional map, RF, CS */
-    if ((offset = sprintf(ret_hmm + coffset, " %6d ",  k))                    < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %6d ",  k)) < 0) return eslEWRITE;
     coffset += offset;
 
     for (x = 0; x < hmm->abc->K; x++){
-      if ( (status = probToString(&ret_hmm, 8, hmm->mat[k][x], coffset)) != eslOK) return status;
+      if ( (status = probToString(ret_hmm, size, 8, hmm->mat[k][x], coffset)) != eslOK) return status;
       coffset += 9;
     }
 
     if (hmm->flags & p7H_MAP) {
-      if ((offset = sprintf(ret_hmm + coffset, " %6d", hmm->map[k]))          < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %6d", hmm->map[k])) < 0) return eslEWRITE;
       coffset += offset;
     } else {
-      if ((offset = sprintf(ret_hmm + coffset, " %6s", "-"))         < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %6s", "-")) < 0) return eslEWRITE;
       coffset += offset;
     }
 
     if (format >= p7_HMMFILE_3e) {
-      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_CONS)  ? hmm->consensus[k] : '-')) < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %c",  (hmm->flags & p7H_CONS)  ? hmm->consensus[k] : '-')) < 0) return eslEWRITE;
       coffset += offset;
     }
 
-    if ((offset = sprintf(ret_hmm + coffset, " %c",    (hmm->flags & p7H_RF)    ? hmm->rf[k]        : '-')) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %c",    (hmm->flags & p7H_RF)    ? hmm->rf[k]        : '-')) < 0) return eslEWRITE;
     coffset += offset;
 
     if (format >= p7_HMMFILE_3f) {
-      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '-')) < 0) return eslEWRITE;
+      if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '-')) < 0) return eslEWRITE;
       coffset += offset;
     }
 
-    if ((offset = sprintf(ret_hmm + coffset, " %c\n",  (hmm->flags & p7H_CS)    ? hmm->cs[k]        : '-')) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, " %c\n",  (hmm->flags & p7H_CS)    ? hmm->cs[k]        : '-')) < 0) return eslEWRITE;
     coffset += offset;
 
     /* Line 2:   insert emissions */
-    if ((offset = sprintf(ret_hmm + coffset, "        ")) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "        ")) < 0) return eslEWRITE;
     coffset += offset;
 
     for (x = 0; x < hmm->abc->K; x++){
-      if( (status = probToString(&ret_hmm, 8, hmm->ins[k][x], coffset)) != eslOK) return status;
+      if( (status = probToString(ret_hmm, size, 8, hmm->ins[k][x], coffset)) != eslOK) return status;
       coffset += 9; /*Fieldwidth + 1 for space*/
     }
 
     /* Line 3:   transitions */
-    if ((offset = sprintf(ret_hmm + coffset, "\n        ")) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "\n        ")) < 0) return eslEWRITE;
     coffset += offset;
 
     for (x = 0; x < p7H_NTRANSITIONS; x++){
-      if ( (status = probToString(&ret_hmm, 8, hmm->t[k][x], coffset)) != eslOK) return status;
+      if ( (status = probToString(ret_hmm, size, 8, hmm->t[k][x], coffset)) != eslOK) return status;
       coffset += 9;/*Fieldwidth + 1 for space*/
     }
-    if ((offset = sprintf(ret_hmm + coffset, "\n")) < 0) return eslEWRITE;
+    if ((offset = snprintf(ret_hmm + coffset, size-coffset, "\n")) < 0) return eslEWRITE;
     coffset += offset;
   }
 
-  if (sprintf(ret_hmm + coffset, "//\n") < 0) return eslEWRITE;
+  if (snprintf(ret_hmm + coffset, size-coffset, "//\n") < 0) return eslEWRITE;
   *ascii_hmm = ret_hmm;
 
   return eslOK;
@@ -1306,7 +1257,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   int           status;
   uint32_t      statstracker = 0;
 
-  hfp->errbuf[0] = '\0';
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if (hfp->newly_opened)
     {
@@ -1322,16 +1274,16 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_NextLine(hfp->efp))                   != eslOK)  goto ERROR;  /* EOF here is normal; could also be a thrown EMEM */
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "unexpected absence of tokens on data line");
 
-      if      (hfp->format == p7_HMMFILE_3f) { if (strcmp(tag, "HMMER3/f") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/f tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3e) { if (strcmp(tag, "HMMER3/e") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/e tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3d) { if (strcmp(tag, "HMMER3/d") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/d tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
-      else                                                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
+      if      (hfp->format == p7_HMMFILE_3f) { if (strcmp(tag, "HMMER3/f") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/f tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3e) { if (strcmp(tag, "HMMER3/e") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/e tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3d) { if (strcmp(tag, "HMMER3/d") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/d tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
+      else                                                                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
     }
 
-  if ((hmm = p7_hmm_CreateShell())                                   == NULL)   ESL_XFAIL(eslEMEM,    hfp->errbuf, "allocation failure, HMM shell");
+  if ((hmm = p7_hmm_CreateShell()) == NULL)   ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failure, HMM shell");
   hmm->offset = offset;
 
   /* Header section */
@@ -1340,138 +1292,138 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL))     != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "Premature end of line");
 
       if (strcmp(tag, "NAME") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No name found on NAME line");
-  p7_hmm_SetName(hmm, tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No name found on NAME line");
+	p7_hmm_SetName(hmm, tok1);
       } 
 
       else if (strcmp(tag, "ACC") == 0)  {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No accession found on ACC line");
-  p7_hmm_SetAccession(hmm, tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No accession found on ACC line");
+	p7_hmm_SetAccession(hmm, tok1);
       }  
 
       else if (strcmp(tag, "DESC") == 0) {
-  if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))      != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No description found on DESC line");
-  p7_hmm_SetDescription(hmm, tok1);
+	if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))      != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No description found on DESC line");
+	p7_hmm_SetDescription(hmm, tok1);
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
-  if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
+	if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
       else if (hfp->format >= p7_HMMFILE_3c && strcmp(tag, "MAXL") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
-  if ((hmm->max_length = atoi(tok1))                                   == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
+	if ((hmm->max_length = atoi(tok1))                                   == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
       }
 
       else if (strcmp(tag, "ALPH") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
-  if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
-  if (*ret_abc == NULL) {
-    if ((abc = esl_alphabet_Create(alphatype))                        == NULL)    ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
-  } else {
-    if ((*ret_abc)->type != alphatype)                                           ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
-    abc = *ret_abc;
-  }
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
+	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
+	if (*ret_abc == NULL) {
+	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL)     ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
+	} else {
+	  if ((*ret_abc)->type != alphatype)                                             ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
+	  abc = *ret_abc;
+	}
       } 
 
       else if (strcmp(tag, "RF") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,    hfp->errbuf, "No yes/no found for RF line");
-  if      (strcasecmp(tok1, "yes") == 0)
-    hmm->flags |= p7H_RF;
-  else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "RF header line must say yes/no, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,    hfp->errbuf, "No yes/no found for RF line");
+	if      (strcasecmp(tok1, "yes") == 0)
+	  hmm->flags |= p7H_RF;
+	else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "RF header line must say yes/no, not %s", tok1);
       } 
 
       else if (strcmp(tag, "MM") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,    hfp->errbuf, "No yes/no found for MM line");
-  if      (strcasecmp(tok1, "yes") == 0)
-    hmm->flags |= p7H_MMASK;
-  else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "MM header line must say yes/no, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,    hfp->errbuf, "No yes/no found for MM line");
+	if      (strcasecmp(tok1, "yes") == 0)
+	  hmm->flags |= p7H_MMASK;
+	else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "MM header line must say yes/no, not %s", tok1);
       }
 
 
       else if (strcmp(tag, "CONS") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for CONS line");
-  if (strcasecmp(tok1, "yes") == 0)
-    hmm->flags |= p7H_CONS;
-  else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "CONS header line must say yes/no, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for CONS line");
+	if (strcasecmp(tok1, "yes") == 0)
+	  hmm->flags |= p7H_CONS;
+	else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "CONS header line must say yes/no, not %s", tok1);
       } 
 
       else if (strcmp(tag, "CS") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for CS line");
-  if (strcasecmp(tok1, "yes") == 0)
-    hmm->flags |= p7H_CS;
-  else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "CS header line must say yes/no, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for CS line");
+	if (strcasecmp(tok1, "yes") == 0)
+	  hmm->flags |= p7H_CS;
+	else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "CS header line must say yes/no, not %s", tok1);
       } 
 
       else if (strcmp(tag, "MAP") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for MAP line");
-  if      (strcasecmp(tok1, "yes") == 0)
-    hmm->flags |= p7H_MAP;
-  else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "MAP header line must say yes/no, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No yes/no found for MAP line");
+	if      (strcasecmp(tok1, "yes") == 0)
+	  hmm->flags |= p7H_MAP;
+	else if (strcasecmp(tok1, "no")  != 0)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "MAP header line must say yes/no, not %s", tok1);
       } 
 
       else if (strcmp(tag, "DATE") == 0) {
-  if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))       != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No date found on DATE line");
-  if (esl_strdup(tok1, -1, &(hmm->ctime))                               != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "strdup() failed to set date");
+	if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))       != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No date found on DATE line");
+	if (esl_strdup(tok1, -1, &(hmm->ctime))                               != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "strdup() failed to set date");
       }
 
       else if (strcmp(tag, "COM") == 0) {
-  /* just skip the first token; it's something like [1], numbering the command lines */
-  if ((status = esl_fileparser_GetTokenOnLine  (hfp->efp, &tok1, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No command number on COM line");
-  if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))       != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No command on COM line");
-  if (hmm->comlog == NULL) {
-    if (esl_strdup(tok1, -1, &(hmm->comlog))                            != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strdup() failed");
-  } else {
-    if (esl_strcat(&(hmm->comlog), -1, "\n", -1)                        != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strcat() failed");
-    if (esl_strcat(&(hmm->comlog), -1, tok1,  -1)                       != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strcat() failed");
-  }
+	/* just skip the first token; it's something like [1], numbering the command lines */
+	if ((status = esl_fileparser_GetTokenOnLine  (hfp->efp, &tok1, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No command number on COM line");
+	if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1))       != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "No command on COM line");
+	if (hmm->comlog == NULL) {
+	  if (esl_strdup(tok1, -1, &(hmm->comlog))                            != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strdup() failed");
+	} else {
+	  if (esl_strcat(&(hmm->comlog), -1, "\n", -1)                        != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strcat() failed");
+	  if (esl_strcat(&(hmm->comlog), -1, tok1,  -1)                       != eslOK)  ESL_XFAIL(eslEMEM,    hfp->errbuf, "esl_strcat() failed");
+	}
       }
       
       else if (strcmp(tag, "NSEQ") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows NSEQ tag");
-  if ((hmm->nseq = atoi(tok1)) == 0)                                               ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid nseq on NSEQ line: should be integer, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows NSEQ tag");
+	if ((hmm->nseq = atoi(tok1)) == 0)                                               ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid nseq on NSEQ line: should be integer, not %s", tok1);
       }
 
       else if (strcmp(tag, "EFFN") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows EFFN tag");
-  if ((hmm->eff_nseq = atof(tok1)) <= 0.0f)                                        ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid eff_nseq on EFFN line: should be a real number, not %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows EFFN tag");
+	if ((hmm->eff_nseq = atof(tok1)) <= 0.0f)                                        ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid eff_nseq on EFFN line: should be a real number, not %s", tok1);
       }
 
       else if (strcmp(tag, "CKSUM") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows CKSUM tag");
-  hmm->checksum = atoll(tok1); /* if atoi(), then you may truncate uint32_t checksums > 2^31-1 */
-  hmm->flags |= p7H_CHKSUM;
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Nothing follows CKSUM tag");
+	hmm->checksum = atoll(tok1); /* if atoi(), then you may truncate uint32_t checksums > 2^31-1 */
+	hmm->flags |= p7H_CHKSUM;
       }
 
       else if (strcmp(tag, "STATS") == 0) {
-  if (hfp->format >= p7_HMMFILE_3b)
-    {
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* MSV | VITERBI | FORWARD */
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* mu | tau */
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok4, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* lambda */
-      if (strcasecmp(tok1, "LOCAL") == 0)
-        {
-    if      (strcasecmp(tok2, "MSV")     == 0)  { hmm->evparam[p7_MMU]  = atof(tok3); hmm->evparam[p7_MLAMBDA] = atof(tok4); statstracker |= 0x1; }
-    else if (strcasecmp(tok2, "VITERBI") == 0)  { hmm->evparam[p7_VMU]  = atof(tok3); hmm->evparam[p7_VLAMBDA] = atof(tok4); statstracker |= 0x2; }
-    else if (strcasecmp(tok2, "FORWARD") == 0)  { hmm->evparam[p7_FTAU] = atof(tok3); hmm->evparam[p7_FLAMBDA] = atof(tok4); statstracker |= 0x4; }
-    else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
-        } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
-    }
-  else if (hfp->format == p7_HMMFILE_3a) /* reverse compatibility with 30a */
-    {
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* VLAMBDA | VMU | FTAU */
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* value */
-      if (strcasecmp(tok1, "LOCAL") == 0)
-        {
-    if      (strcasecmp(tok2, "VLAMBDA") == 0)  { hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_FLAMBDA] = atof(tok3);  statstracker |= 0x1; }
-    else if (strcasecmp(tok2, "VMU")     == 0)  {                            hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU]     = atof(tok3);  statstracker |= 0x2; }
-    else if (strcasecmp(tok2, "FTAU")    == 0)  {                                                       hmm->evparam[p7_FTAU]    = atof(tok3);  statstracker |= 0x4; }
-    else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
-        } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
-    }
+	if (hfp->format >= p7_HMMFILE_3b)
+	  {
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* MSV | VITERBI | FORWARD */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* mu | tau */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok4, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* lambda */
+	    if (strcasecmp(tok1, "LOCAL") == 0)
+	      {
+		if      (strcasecmp(tok2, "MSV")     == 0)  { hmm->evparam[p7_MMU]  = atof(tok3); hmm->evparam[p7_MLAMBDA] = atof(tok4); statstracker |= 0x1; }
+		else if (strcasecmp(tok2, "VITERBI") == 0)  { hmm->evparam[p7_VMU]  = atof(tok3); hmm->evparam[p7_VLAMBDA] = atof(tok4); statstracker |= 0x2; }
+		else if (strcasecmp(tok2, "FORWARD") == 0)  { hmm->evparam[p7_FTAU] = atof(tok3); hmm->evparam[p7_FLAMBDA] = atof(tok4); statstracker |= 0x4; }
+		else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
+	      } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
+	  }
+	else if (hfp->format == p7_HMMFILE_3a) /* reverse compatibility with 30a */
+	  {
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* LOCAL */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* VLAMBDA | VMU | FTAU */
+	    if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* value */
+	    if (strcasecmp(tok1, "LOCAL") == 0)
+	      {
+		if      (strcasecmp(tok2, "VLAMBDA") == 0)  { hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_FLAMBDA] = atof(tok3);  statstracker |= 0x1; }
+		else if (strcasecmp(tok2, "VMU")     == 0)  {                            hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU]     = atof(tok3);  statstracker |= 0x2; }
+		else if (strcasecmp(tok2, "FTAU")    == 0)  {                                                       hmm->evparam[p7_FTAU]    = atof(tok3);  statstracker |= 0x4; }
+		else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
+	      } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
+	  }
       }
 
       else if (strcmp(tag, "GA") == 0) {
@@ -1560,16 +1512,16 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if (atoi(tok1) != k)                                                               ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Expected match line to start with %d (of %d); saw %s", k, hmm->M, tok1);
       
       for (x = 0; x < abc->K; x++) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on match line, node %d: expected %d, got %d\n", k, abc->K, x);
-    hmm->mat[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on match line, node %d: expected %d, got %d\n", k, abc->K, x);
+	hmm->mat[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
       }
       
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))     != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing MAP field on match line for node %d: should at least be -", k);
       if (hmm->flags & p7H_MAP) hmm->map[k] = atoi(tok1);
 
       if (hfp->format >= p7_HMMFILE_3e) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing CONS field on match line for node %d: should at least be -", k);
-  if (hmm->flags & p7H_CONS) hmm->consensus[k] = *tok1;
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing CONS field on match line for node %d: should at least be -", k);
+	if (hmm->flags & p7H_CONS) hmm->consensus[k] = *tok1;
       }
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))     != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing RF field on match line for node %d: should at least be -",  k);
       if (hmm->flags & p7H_RF) hmm->rf[k]   = *tok1;
@@ -1586,13 +1538,13 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       
       if ((status = esl_fileparser_NextLine(hfp->efp))                        != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data in main model: no insert emission line, node %d", k);
       for (x = 0; x < abc->K; x++) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on insert line, node %d: expected %d, got %d\n", k, abc->K, x);
-  hmm->ins[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on insert line, node %d: expected %d, got %d\n", k, abc->K, x);
+	hmm->ins[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
       }
       if ((status = esl_fileparser_NextLine(hfp->efp))                        != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data in main model: no transition line, node %d", k);
       for (x = 0; x < p7H_NTRANSITIONS; x++) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on transition line, node %d: expected %d, got %d\n", k, abc->K, x);
-  hmm->t[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on transition line, node %d: expected %d, got %d\n", k, abc->K, x);
+	hmm->t[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
       }
     }
 
@@ -1640,8 +1592,9 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   off_t         offset = 0;
   int           status;
 
-  hfp->errbuf[0] = '\0';
-  if (feof(hfp->f))                                             { status = eslEOF;       goto ERROR; }
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
+  if (feof(hfp->f))  { status = eslEOF; goto ERROR; }
 
   if (hfp->newly_opened) 
     {
@@ -1766,7 +1719,8 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   off_t         offset = 0;
   int           status;
  
-  hfp->errbuf[0] = '\0';
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if (hfp->newly_opened)
     {
@@ -1796,7 +1750,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
    */
   while ((status = esl_fileparser_NextLine(hfp->efp)) == eslOK)
     {
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL))     != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "Premature end of line");
+      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "Premature end of line");
 
       if (strcmp(tag, "NAME") == 0) {
   if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No name found on NAME line");
@@ -1814,7 +1768,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
+  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
   if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
@@ -1828,7 +1782,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   else    ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
 
   if (*ret_abc == NULL) {
-    if ((abc = esl_alphabet_Create(alphatype))                        == NULL)    ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
+    if ((abc = esl_alphabet_Create(alphatype))                        == NULL)  ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
   } else {
     if ((*ret_abc)->type != alphatype)                                           ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
     abc = *ret_abc;
@@ -2094,16 +2048,18 @@ multiline(FILE *fp, const char *pfx, char *s)
  * string.  It does not matter if it ends in <\n> or not. <pfx>
  * must be a valid <NUL>-terminated string; it may be empty.
  *
- * Args:     ret_char: char pointer pointer
- *           pfx:  prefix for each line
- *           s:    line to break up and print; tolerates a NULL
- *           coffset: the current write position in the string (pointer so we can add to it).
+ * Args:     str:     string we're writing/appending to
+ *           size:    original allocated length of <str>, total. (We're at position <*coffset> in the whole thing.)
+ *           pfx:     prefix for each line we add to <str>
+ *           s:       the line(s) to break up and add to <str> (can be NULL)
+ *           coffset: the current write position in the string (pointer so we can add to it; will be updated upon return)
  *
  * Returns: <eslOK> on success or <eslEWRITE> on error.
  *
  */
 static int
-multilineString(char **ret_str, const char *pfx, char *s, int *coffset){
+multilineString(char *str, int size, const char *pfx, char *s, int *coffset)
+{
   char *sptr  = s;
   char *end   = NULL;
   int   n     = 0;
@@ -2114,15 +2070,15 @@ multilineString(char **ret_str, const char *pfx, char *s, int *coffset){
     end = strchr(sptr, '\n');
     if (end != NULL) {                  /* if there's no \n left, end == NULL */
       n = end - sptr;                       /* n chars exclusive of \n */
-      if ((offset = sprintf(*ret_str + *coffset, "%s [%d] ", pfx, nline++)) < 0) return eslEWRITE;
+      if ((offset = snprintf(str + *coffset, size-*coffset, "%s [%d] ", pfx, nline++)) < 0) return eslEWRITE;
       *coffset += offset;
 
-      strncpy(*ret_str + *coffset, sptr, sizeof(char) * n); /* using strncpy lets us write fixed # of chars   */
+      strncpy(str + *coffset, sptr, sizeof(char) * n); /* using strncpy lets us write fixed # of chars   */
       *coffset +=n;
-      if ((offset = sprintf(*ret_str + *coffset, "\n"))        < 0)              return eslEWRITE;
+      if ((offset = snprintf(str + *coffset, size-*coffset, "\n")) < 0) return eslEWRITE;
       sptr += n + 1;                       /* +1 to get past \n */
     } else {
-      if ((offset = sprintf(*ret_str + *coffset, "%s [%d] %s\n", pfx, nline++, sptr)) < 0) return eslEWRITE;
+      if ((offset = snprintf(str + *coffset, size-*coffset, "%s [%d] %s\n", pfx, nline++, sptr)) < 0) return eslEWRITE;
       *coffset += offset;
     }
   } while (end != NULL  && *sptr != '\0');   /* *sptr == 0 if <s> terminates with a \n */
@@ -2142,7 +2098,7 @@ printprob(FILE *fp, int fieldwidth, float p)
 
 /* probToString
  *
- * Used to print probabilities floats in a fixed field to a char. Based on printprob.
+ * Used to print probabilities floats in a fixed field to a growing string. Based on printprob.
  *
  *
  * given :   4.115212345633
@@ -2151,21 +2107,20 @@ printprob(FILE *fp, int fieldwidth, float p)
  *
  * If p is 0.0 or 1.0, append * or 0.00000
  *
- * Args:     str:         (pointer to pointer)
- *           fieldwidth:  The size of the number to be printed. Note, a space is
- *                        prepended
+ * Args:     str:         string we're appending to   
+ *           size:        original (total) allocation of <str>. (We're currently at position <offset> in it.) 
+ *           fieldwidth:  The size of the number to be printed. Note, a space is prepended
  *           p:           float
- *           offset:      currnet position in the strng
+ *           offset:      current position in str. We don't need to update offset, because we know to update it by +(fieldwidth+1).
  *
  * Returns: <eslOK> on success or <eslEWRITE> on error.
  */
-
 static int
-probToString(char **str , int fieldwidth, float p, int offset)
+probToString(char *str, int size, int fieldwidth, float p, int offset)
 {
-  if      (p == 0.0) { if (sprintf(*str+offset, " %*s",   fieldwidth, "*")      < 0) return( eslEWRITE ); }
-  else if (p == 1.0) { if (sprintf(*str+offset, " %*.5f", fieldwidth, 0.0)      < 0) return( eslEWRITE ); }
-  else               { if (sprintf(*str+offset, " %*.5f", fieldwidth, -logf(p)) < 0) return( eslEWRITE ); }
+  if      (p == 0.0) { if (snprintf(str+offset, size-offset, " %*s",   fieldwidth, "*")      < 0) return eslEWRITE; }
+  else if (p == 1.0) { if (snprintf(str+offset, size-offset, " %*.5f", fieldwidth, 0.0)      < 0) return eslEWRITE; }
+  else               { if (snprintf(str+offset, size-offset, " %*.5f", fieldwidth, -logf(p)) < 0) return eslEWRITE; }
   return eslOK;
 }
 
@@ -2255,7 +2210,7 @@ h2ascii2prob(char *s, float null)
   icc  -O3 -static -o p7_hmmfile_benchmark -I. -L. -I../easel -L../easel -Dp7HMMFILE_BENCHMARK p7_hmmfile.c -lhmmer -leasel -lm 
   ./p7_hmmfile_benchmark Pfam.hmm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2295,7 +2250,7 @@ main(int argc, char **argv)
 
   esl_stopwatch_Start(w);
 
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
@@ -2373,8 +2328,8 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   fclose(fp);
   
   /* Read it back */
-  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)        != eslOK)  esl_fatal(msg);
   
   /* It should have determined the right file format */
   if (format == -1) { if (hfp->format != p7_HMMFILE_3f) esl_fatal(msg); }
@@ -2390,13 +2345,13 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   p7_hmmfile_Close(hfp);
 
   /* Do it all again, but with binary format */
-  if ((fp = fopen(tmpfile, "w"))                  == NULL)   esl_fatal(msg);
-  if (p7_hmmfile_WriteBinary(fp, format, hmm)     != eslOK)  esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "w"))                 == NULL)   esl_fatal(msg);
+  if (p7_hmmfile_WriteBinary(fp, format, hmm)    != eslOK)  esl_fatal(msg);
   fclose(fp);
-  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)        != eslOK)  esl_fatal(msg);
   if (format < p7_HMMFILE_3e) { strcpy(new->consensus, hmm->consensus); }
-  if (p7_hmm_Compare(hmm, new, 0.0001)            != eslOK)  esl_fatal(msg);
+  if (p7_hmm_Compare(hmm, new, 0.0001)           != eslOK)  esl_fatal(msg);
 
   if (format == -1) { if (hfp->format != p7_HMMFILE_3f)      esl_fatal(msg); }
   else              { if (hfp->format != format)             esl_fatal(msg); } 
@@ -2460,7 +2415,7 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
 #ifdef p7HMMFILE_TESTDRIVE
 /* gcc -g -Wall -Dp7HMMFILE_TESTDRIVE -I. -I../easel -L. -L../easel -o p7_hmmfile_test p7_hmmfile.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2510,7 +2465,7 @@ main(int argc, char **argv)
 /*****************************************************************
  * 9. Example.
  *****************************************************************/
-/* On using the example to test error messages from p7_hmmfile_OpenE():
+/* On using the example to test error messages from p7_hmmfile_Open():
  *    Message
  *  --------------
  *  .gz file missing/not readable     \rm test.hmm.gz; touch test.hmm.gz; src/p7_hmmfile_example test.hmm.gz
@@ -2527,7 +2482,7 @@ main(int argc, char **argv)
 #ifdef p7HMMFILE_EXAMPLE
 /* gcc -g -Wall -Dp7HMMFILE_EXAMPLE -I. -I../easel -L. -L../easel -o p7_hmmfile_example p7_hmmfile.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2545,7 +2500,7 @@ main(int argc, char **argv)
   int           status;
   
   /* An example of reading a single HMM from a file, and checking that it is the only one. */
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
@@ -2570,11 +2525,4 @@ main(int argc, char **argv)
 #endif /*p7HMMFILE_EXAMPLE*/
 /*----------------------- end, example --------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

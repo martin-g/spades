@@ -6,7 +6,6 @@
  *    3. Unit tests.
  *    4. Test driver.
  *    5. Example.
- *    6. Copyright and license information.
  *
  * Exegesis:
  * 
@@ -43,7 +42,7 @@
  * implement an efficient log-space SIMD vector implementation of
  * Forward.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include <math.h>
 #include "hmmer.h"
 
@@ -157,7 +156,7 @@ p7_FLogsumError(float a, float b)
  * based on default 1e8 iterations (-N 100000000).
  * Clocks based on 2.26GHz = 2.26 clocks/nsec
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -313,7 +312,7 @@ utest_FLogsumSpecials(void)
   gcc -o logsum_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7LOGSUM_TESTDRIVE logsum.c -leasel -lm
   ./logsum_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -362,7 +361,7 @@ main(int argc, char **argv)
 /* gcc -o example -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_EXAMPLE logsum.c -leasel -lm
  * ./example -0.5 -0.5
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "hmmer.h"
 
@@ -387,12 +386,6 @@ main(int argc, char **argv)
 /*--------------------- end, example ----------------------------*/
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: logsum.c 3474 2011-01-17 13:25:32Z eddys $
- *****************************************************************/
 
 /* Footnotes.
  * 

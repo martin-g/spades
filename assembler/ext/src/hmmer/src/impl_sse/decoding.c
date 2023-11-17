@@ -5,20 +5,14 @@
  *   2. Benchmark driver.
  *   3. Unit tests.
  *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information.
- *   
- * SRE, Mon Aug 18 08:15:50 2008 [Janelia]
- * SVN $Id$
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include <x86intrin.h>
 
 #include "easel.h"
 #include "esl_sse.h"
@@ -212,7 +206,7 @@ p7_DomainDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P
    manipulating 3 matrices at the same time, we can't fit the calculation 
    in cache.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -258,8 +252,8 @@ main(int argc, char **argv)
   float           fsc, bsc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
@@ -377,7 +371,7 @@ utest_decoding(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   gcc -o decoding_utest -msse2 -g -Wall -I.. -L.. -I../../easel -L../../easel -Dp7DECODING_TESTDRIVE decoding.c -lhmmer -leasel -lm
   ./decoding_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -428,20 +422,4 @@ main(int argc, char **argv)
 #endif /*p7DECODING_TESTDRIVE*/
 /*-------------------- end, test driver -------------------------*/
 
-
-
-
-/*****************************************************************
- * 5. Example
- *****************************************************************/
-#ifdef p7DECODING_EXAMPLE
-
-#endif /*p7DECODING_EXAMPLE*/
-/*------------------------ example ------------------------------*/
-
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 

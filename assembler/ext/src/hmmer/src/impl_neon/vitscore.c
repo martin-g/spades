@@ -1,56 +1,214 @@
-/* Viterbi score implementation; non-optimized.
- * 
- * This Viterbi routine is pass through to the generic
- * Viterbi routine.
- * 
+/* Viterbi score implementation; NEON version.
+ *
+ * This is a SIMD vectorized, striped, interleaved, one-row O(M)
+ * memory implementation of the Viterbi algorithm, for calculating an
+ * accurate Viterbi score, without traceback.
+ *
+ * This implementation has full range and precision, so it may be used
+ * in any alignment mode (not just local), and on any target sequence
+ * (not excluding high-scoring ones).
+ *
+ * The optimized profile must be configured to contain lspace float
+ * scores, not its normal pspace float scores.
+ *
  * Contents:
  *   1. Viterbi score implementation.
- *   2. Benchmark driver. 
+ *   2. Benchmark driver.
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
- *   
- * MSF, Tue Nov 03, 2009 [Janelia]
- * SVN $Id$
+ *
+ * SRE, Sun Aug  3 13:10:24 2008 [St. Louis]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
 
+
 #include "easel.h"
+#include "esl_neon.h"
 
 #include "hmmer.h"
-#include "impl_dummy.h"
+#include "impl_neon.h"
 
 /*****************************************************************
  * 1. Viterbi score implementation
  *****************************************************************/
 
 /* Function:  p7_ViterbiScore()
- * Synopsis:  Calculates Viterbi score.
- * Incept:    MSF, Tue Nov 03, 2009 [Janelia]
+ * Synopsis:  Calculates Viterbi score, correctly, and vewy vewy fast.
+ * Incept:    SRE, Tue Nov 27 09:15:24 2007 [Janelia]
  *
- * Purpose:   Calculates the Viterbi score for sequence <dsq> of
- *            length <L> residues, using profile <om>. Return the
- *            Viterbi score (in nats) in <ret_sc>.
- *            
- *            The score is calculated using the generic Viterbi
- *            routine.
+ * Purpose:   Calculates the Viterbi score for sequence <dsq> of length <L>
+ *            residues, using optimized profile <om>, and a preallocated
+ *            one-row DP matrix <ox>. Return the Viterbi score (in nats)
+ *            in <ret_sc>.
+ *
+ *            The model <om> must be configured specially to have
+ *            lspace float scores, not its usual pspace float scores for
+ *            <p7_ForwardFilter()>.
+ *
+ *            As with all <*Score()> implementations, the score is
+ *            accurate (full range and precision) and can be
+ *            calculated on models in any mode, not only local modes.
  *
  * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues          
+ *            L       - length of dsq in residues
  *            om      - optimized profile
  *            ox      - DP matrix
- *            ret_sc  - RETURN: Viterbi score (in nats)          
+ *            ret_sc  - RETURN: Viterbi score (in nats)
  *
  * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
 p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  return p7_GViterbi(dsq, L, om, ox, ret_sc);
+  register float32x4_t mpv, dpv, ipv;   /* previous row values                                       */
+  register float32x4_t sv;		   /* temp storage of 1 curr row value in progress              */
+  register float32x4_t dcv;		   /* delayed storage of D(i,q+1)                               */
+  register float32x4_t xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register float32x4_t xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register float32x4_t Dmaxv;           /* keeps track of maximum D cell on row                      */
+  float32x4_t  infv;			   /* -eslINFINITY in a vector                                  */
+  float    xN, xE, xB, xC, xJ;	   /* special states' scores                                    */
+  float    Dmax;		   /* maximum D cell on row                                     */
+  int i;			   /* counter over sequence positions 1..L                      */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q            = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
+  float32x4_t *dp  = ox->dpf[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  float32x4_t *rsc;			   /* will point at om->rf[x] for residue x[i]                  */
+  float32x4_t *tsc;			   /* will point into (and step thru) om->tf                    */
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ4) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  ox->M  = om->M;
+
+  /* Initialization. */
+  infv = vmovq_n_f32(-eslINFINITY);
+  for (q = 0; q < Q; q++)
+    MMXo(q) = IMXo(q) = DMXo(q) = infv;
+  xN   = 0.;
+  xB   = om->xf[p7O_N][p7O_MOVE];
+  xE   = -eslINFINITY;
+  xJ   = -eslINFINITY;
+  xC   = -eslINFINITY;
+
+#if eslDEBUGLEVEL > 0
+  if (ox->debugging) p7_omx_DumpFloatRow(ox, FALSE, 0, 5, 2, xE, xN, xJ, xB, xC); /* logify=FALSE, <rowi>=0, width=5, precision=2*/
+#endif
+
+  for (i = 1; i <= L; i++)
+    {
+      rsc   = om->rf[dsq[i]];
+      tsc   = om->tf;
+      dcv   = infv;
+      xEv   = infv;
+      Dmaxv = infv;
+      xBv   = vmovq_n_f32(xB);
+
+      mpv = esl_neon_rightshift_float(MMXo(Q-1), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
+      dpv = esl_neon_rightshift_float(DMXo(Q-1), infv);
+      ipv = esl_neon_rightshift_float(IMXo(Q-1), infv);
+      for (q = 0; q < Q; q++)
+	{
+	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+	  sv   =               vaddq_f32(xBv, *tsc);  tsc++;
+	  sv   = vmaxq_f32(sv, vaddq_f32(mpv, *tsc)); tsc++;
+	  sv   = vmaxq_f32(sv, vaddq_f32(ipv, *tsc)); tsc++;
+	  sv   = vmaxq_f32(sv, vaddq_f32(dpv, *tsc)); tsc++;
+	  sv   = vaddq_f32(sv, *rsc);                 rsc++;
+	  xEv  = vmaxq_f32(xEv, sv);
+
+	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
+	   * {MDI}MX(q) is then the current, not the prev row
+	   */
+	  mpv = MMXo(q);
+	  dpv = DMXo(q);
+	  ipv = IMXo(q);
+
+	  /* Do the delayed stores of {MD}(i,q) now that memory is usable */
+	  MMXo(q) = sv;
+	  DMXo(q) = dcv;
+
+	  /* Calculate the next D(i,q+1) partially: M->D only;
+           * delay storage, holding it in dcv
+	   */
+	  dcv   = vaddq_f32(sv, *tsc); tsc++;
+	  Dmaxv = vmaxq_f32(dcv, Dmaxv);
+
+	  /* Calculate and store I(i,q) */
+	  sv      =               vaddq_f32(mpv, *tsc);  tsc++;
+	  sv      = vmaxq_f32(sv, vaddq_f32(ipv, *tsc)); tsc++;
+	  IMXo(q) = vaddq_f32(sv, *rsc);                  rsc++;
+	}
+
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
+      esl_neon_hmax_f32(xEv, &xE);
+      xN = xN +  om->xf[p7O_N][p7O_LOOP];
+      xC = ESL_MAX(xC + om->xf[p7O_C][p7O_LOOP],  xE + om->xf[p7O_E][p7O_MOVE]);
+      xJ = ESL_MAX(xJ + om->xf[p7O_J][p7O_LOOP],  xE + om->xf[p7O_E][p7O_LOOP]);
+      xB = ESL_MAX(xJ + om->xf[p7O_J][p7O_MOVE],  xN + om->xf[p7O_N][p7O_MOVE]);
+      /* and now xB will carry over into next i, and xC carries over after i=L */
+
+      /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
+       * prove that we don't need to evaluate any D->D paths at all.
+       *
+       * The observation is that if we can show that on the next row,
+       * B->M(i+1,k) paths always dominate M->D->...->D->M(i+1,k) paths
+       * for all k, then we don't need any D->D calculations.
+       *
+       * The test condition is:
+       *      max_k D(i,k) + max_k ( TDD(k-2) + TDM(k-1) - TBM(k) ) < xB(i)
+       * So:
+       *   max_k (TDD(k-2) + TDM(k-1) - TBM(k)) is precalc'ed in om->dd_bound;
+       *   max_k D(i,k) is why we tracked Dmaxv;
+       *   xB(i) was just calculated above.
+       */
+      esl_neon_hmax_f32(Dmaxv, &Dmax);
+      if (Dmax + om->ddbound_f > xB)
+	{
+	  /* Now we're obligated to do at least one complete DD path to be sure. */
+	  /* dcv has carried through from end of q loop above */
+	  dcv = esl_neon_rightshift_float(dcv, infv);
+	  tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
+	  for (q = 0; q < Q; q++)
+	    {
+	      DMXo(q) = vmaxq_f32(dcv, DMXo(q));
+	      dcv     = vaddq_f32(DMXo(q), *tsc); tsc++;
+	    }
+
+	  /* We may have to do up to three more passes; the check
+	   * is for whether crossing a segment boundary can improve
+	   * our score.
+	   */
+	  do {
+	    dcv = esl_neon_rightshift_float(dcv, infv);
+	    tsc = om->tf + 7*Q;	/* set tsc to start of the DD's */
+	    for (q = 0; q < Q; q++)
+	      {
+		if (! esl_neon_any_gt_s16(dcv, DMXo(q))) break;
+		DMXo(q) = vmaxq_f32(dcv, DMXo(q));
+		dcv     = vaddq_f32(DMXo(q), *tsc);   tsc++;
+	      }
+	  } while (q == Q);
+	}
+      else
+	{ /* not calculating DD? then just store that last MD vector we calc'ed. */
+	  dcv     = esl_neon_rightshift_float(dcv, infv);
+	  DMXo(0) = dcv;
+	}
+
+#if eslDEBUGLEVEL > 0
+      if (ox->debugging) p7_omx_DumpFloatRow(ox, FALSE, i, 5, 2, xE, xN, xJ, xB, xC); /* logify=FALSE, <rowi>=i, width=5, precision=2*/
+#endif
+    } /* end loop over sequence residues 1..L */
+
+  /* finally C->T */
+  *ret_sc = xC + om->xf[p7O_C][p7O_MOVE];
+  return eslOK;
 }
 /*------------------ end, p7_ViterbiScore() ---------------------*/
 
@@ -64,15 +222,12 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * an explanation. Here -c and -x are the same: both compare
  * to p7_GViterbi() scores.
  */
-/* 
-  gcc -o benchmark-vitscore -std=gnu99 -g -Wall -I.. -L.. -I../../easel -L../../easel -Dp7VITSCORE_BENCHMARK vitscore.c -lhmmer -leasel -lm 
-  icc -o benchmark-vitscore -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITSCORE_BENCHMARK vitscore.c -lhmmer -leasel -lm 
-
-  ./benchmark-vitscore <hmmfile>            runs benchmark 
+/*
+  ./benchmark-vitscore <hmmfile>            runs benchmark
   ./benchmark-vitscore -N100 -c <hmmfile>   compare scores to generic impl
   ./benchmark-vitscore -N100 -x <hmmfile>   equate scores to exact emulation
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -82,12 +237,12 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_dummy.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
@@ -95,9 +250,9 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for non-optimized ViterbiScore()";
+static char banner[] = "benchmark driver for NEON ViterbiScore()";
 
-int 
+int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
@@ -119,8 +274,8 @@ main(int argc, char **argv)
   float           sc1, sc2;
   double          base_time, bench_time, Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -146,12 +301,12 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_ViterbiScore (dsq, L, om, ox, &sc1);   
+      p7_ViterbiScore (dsq, L, om, ox, &sc1);
 
       if (esl_opt_GetBoolean(go, "-c") || esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
-	  printf("%.4f %.4f\n", sc1, sc2);  
+	  p7_GViterbi(dsq, L, gm, gx, &sc2);
+	  printf("%.4f %.4f\n", sc1, sc2);
 	}
     }
   esl_stopwatch_Stop(w);
@@ -188,7 +343,7 @@ main(int argc, char **argv)
 #include "esl_randomseq.h"
 
 /* ViterbiScore() unit test
- * 
+ *
  * We can compare these scores to GViterbi() almost exactly; the only
  * differences should be negligible roundoff errors. Must convert
  * the optimized profile to lspace, though, rather than pspace.
@@ -230,18 +385,15 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
  * 4. Test driver
  *****************************************************************/
 #ifdef p7VITSCORE_TESTDRIVE
-/* 
-   gcc -g -Wall -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitscore_utest -Dp7VITSCORE_TESTDRIVE vitscore.c -lhmmer -leasel -lm
-   ./vitscore_utest
- */
-#include "p7_config.h"
+
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_dummy.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -253,7 +405,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the non-optimized implementation";
+static char banner[] = "test driver for the NEON implementation";
 
 int
 main(int argc, char **argv)
@@ -270,9 +422,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
+  utest_viterbi_score(r, abc, bg, M, L, N);
+  utest_viterbi_score(r, abc, bg, 1, L, 10);
+  utest_viterbi_score(r, abc, bg, M, 1, 10);
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -281,9 +433,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  utest_viterbi_score(r, abc, bg, M, L, N);   
-  utest_viterbi_score(r, abc, bg, 1, L, 10);  
-  utest_viterbi_score(r, abc, bg, M, 1, 10);  
+  utest_viterbi_score(r, abc, bg, M, L, N);
+  utest_viterbi_score(r, abc, bg, 1, L, 10);
+  utest_viterbi_score(r, abc, bg, M, 1, 10);
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -303,10 +455,10 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7VITSCORE_EXAMPLE vitscore.c -lhmmer -leasel -lm
+   
    ./example <hmmfile> <seqfile>
- */ 
-#include "p7_config.h"
+ */
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -314,9 +466,9 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_dummy.h"
+#include "impl_neon.h"
 
-int 
+int
 main(int argc, char **argv)
 {
   char           *hmmfile = argv[1];
@@ -336,8 +488,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
@@ -361,14 +513,14 @@ main(int argc, char **argv)
   ox = p7_omx_Create(gm->M, 0, sq->n);
   gx = p7_gmx_Create(gm->M, sq->n);
 
-  /* Useful to place and compile in for debugging: 
+  /* Useful to place and compile in for debugging:
      p7_oprofile_Dump(stdout, om);         dumps the optimized profile
      p7_omx_SetDumpMode(ox, TRUE);         makes the fast DP algorithms dump their matrices
      p7_gmx_Dump(stdout, gx, p7_DEFAULT);  dumps a generic DP matrix
   */
 
-  p7_ViterbiScore(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi (non-optimized):  %.2f nats\n", sc);
-  p7_GViterbi    (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):        %.2f nats\n", sc);
+  p7_ViterbiScore(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (NEON):  %.2f nats\n", sc);
+  p7_GViterbi    (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit
    * scores, by subtracting the null model score and rescaling.
@@ -389,7 +541,3 @@ main(int argc, char **argv)
 }
 #endif /*p7VITSCORE_EXAMPLE*/
 /*-------------------------- end, example ------------------------------*/
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/ 

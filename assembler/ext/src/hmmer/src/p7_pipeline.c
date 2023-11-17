@@ -5,10 +5,8 @@
  *   2. Pipeline API
  *   3. Example 1: search mode (in a sequence db)
  *   4. Example 2: scan mode (in an HMM db)
- *   5. Copyright and license information
- * 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -98,7 +96,7 @@ typedef struct {
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
+p7_pipeline_Create(const ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
   int          seed = (go ? esl_opt_GetInteger(go, "--seed") : 42);
@@ -501,7 +499,7 @@ p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 
   if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
 
-  if (pli->mode == p7_SEARCH_SEQS) 
+  if (pli->mode == p7_SEARCH_SEQS)
     status = p7_pli_NewModelThresholds(pli, om);
 
   pli->W = om->max_length;
@@ -538,26 +536,29 @@ p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 {
 
   if (pli->use_bit_cutoffs)
+  {
+    if (pli->use_bit_cutoffs == p7H_GA)
     {
-      if (pli->use_bit_cutoffs == p7H_GA)
-    {
-      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_GA1];
       pli->domT = pli->incdomT = om->cutoff[p7_GA2];
     }
-      else if  (pli->use_bit_cutoffs == p7H_TC)
+    else if  (pli->use_bit_cutoffs == p7H_TC)
     {
-      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_TC1];
       pli->domT = pli->incdomT = om->cutoff[p7_TC2];
     }
-      else if (pli->use_bit_cutoffs == p7H_NC)
+    else if (pli->use_bit_cutoffs == p7H_NC)
     {
-      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_NC1];
       pli->domT = pli->incdomT = om->cutoff[p7_NC2];
     }
-    }
+  }
 
   return eslOK;
 }
@@ -574,10 +575,27 @@ p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 int
 p7_pli_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
 {
-  if (!pli->long_targets) pli->nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
-  pli->nres += sq->n;
-  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs;
+  if (! pli->long_targets) {  // if long_targets, sequence counting happens in main loop of the master thread, which can track multiple windows for a single long sequence
+    pli->nseqs++;             
+    if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs; //  ... whereas worker threads call p7_pli_NewSeq(), so pli->nseqs can't even be read, when in longtargets mode
+  }
+  pli->nres += sq->n;  
   return eslOK;
+
+  // Note on what nhmmer (long_targets mode) is doing w.r.t. threads and nseqs/nres.
+  //
+  // nhmmer counts pli->nseqs in the master thread (albeit with a possible
+  // adjustment at the end in FM-indexing mode). nres, though, is
+  // counted by *worker* threads, by calling p7_pli_NewSeq(), followed
+  // by adjustments in pipeline_thread() for window overlap and the
+  // opposite strand.  
+  //
+  // To avoid thread races, in longtarget mode you must make sure
+  // you only touch nres here, not nseqs. Since nhmmer does not use
+  // nseqs for E-value calculations (it uses nres/W) and furthermore
+  // it does not use lower bound E-values during a search the way
+  // hmmsearch does, we can just have p7_pli_NewSeq() update nres
+  // and ignore anything having to do with nseqs.
 }
 
 /* Function:  p7_pipeline_Merge()
@@ -662,7 +680,18 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  *
  * Throws:    <eslEMEM> on allocation failure.
  *
+ *            <eslETYPE> if <sq> is more than 100K long, which can
+ *            happen when someone uses hmmsearch/hmmscan instead of
+ *            nhmmer/nhmmscan on a genome DNA seq db.
+ *
  * Xref:      J4/25.
+ *
+ * Note:      Error handling needs improvement. The <eslETYPE> exception
+ *            was added as a late bugfix. It really should be an <eslEINVAL>
+ *            normal error (because it's a user error). But then we need
+ *            all our p7_Pipeline() calls to check their return status
+ *            and handle normal errors appropriately, which we haven't 
+ *            been careful enough about. [SRE H9/4]
  */
 int
 p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
@@ -682,6 +711,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              status;
   
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+  if (sq->n > 100000) ESL_EXCEPTION(eslETYPE, "Target sequence length > 100K, over comparison pipeline limit.\n(Did you mean to use nhmmer/nhmmscan?)");
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
@@ -737,9 +767,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
 
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
-  if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
+  if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
+  if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
 
 
   /* Calculate the null2-corrected per-seq score */
@@ -1033,9 +1064,8 @@ ERROR:
 static int
 p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
-    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
-    int complementarity, int *overlap, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
-)
+    int64_t seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
+    int complementarity, int *overlap, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp)
 {
   P7_DOMAIN        *dom     = NULL;     /* convenience variable, ptr to current domain */
   P7_HIT           *hit     = NULL;     /* ptr to the current hit output data      */
@@ -1135,7 +1165,7 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
         continue; // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
       }
 
-     /* note: this bitscore was computed under a model with length of
+     /* Note: this bitscore was computed under a model with length of
       * env_len (jenv-ienv+1). Here, the score is modified (reduced) by
       * treating the hit as though it came from a window of length
       * om->max_length. To do this:
@@ -1467,10 +1497,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                         P7_BG *bg, P7_TOPHITS *hitlist,
                         int64_t seqidx, const ESL_SQ *sq, int complementarity,
                         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-                        /*, ESL_STOPWATCH *ssv_watch_master
-                        , ESL_STOPWATCH *postssv_watch_master
-                        , ESL_STOPWATCH *watch_slave
-*/
                         )
 {
   int              i;
@@ -1495,6 +1521,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
+  pli_tmp->tmpseq = NULL;
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
@@ -1516,41 +1543,28 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-//  if (watch_slave) {
- //   esl_stopwatch_Start(watch_slave);
- // }
-
-
   if (fmf) // using an FM-index
-    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, &msv_windowlist );
+    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, pli->r, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
-/*  if (watch_slave) {
-    esl_stopwatch_Stop(watch_slave);
-    esl_stopwatch_Include(ssv_watch_master, watch_slave);
-    esl_stopwatch_Start(watch_slave);
-  }
-*/
+
 
   /* convert hits to windows, merging neighboring windows
    */
   if ( msv_windowlist.count > 0 ) {
 
-    /* In scan mode, if it passes the MSV filter, read the rest of the profile
-     * Not necessary for dummy mode, where the ->base_w variable checks cause compilation failure*/
-#ifndef P7_IMPL_DUMMY_INCLUDED
+    /* In scan mode, if it passes the MSV filter, read the rest of the profile */
     if (!fmf && pli->hfp)
-    {
-      if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
-        p7_oprofile_ReadRest(pli->hfp, om);
-        if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+      {
+	if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
+	  p7_oprofile_ReadRest(pli->hfp, om);
+	  if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+	}
       }
-    }
-#endif
 
     p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
 
-    if (data->prefix_lengths == NULL)  //otherwise, already filled in
+    if (data->prefix_lengths == NULL)  // otherwise, already filled in
       p7_hmm_ScoreDataComputeRest(om, data);
 
     p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, 0);
@@ -1662,12 +1676,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     free (vit_windowlist.windows);
   }
 
-/*
-  if (watch_slave) {
-    esl_stopwatch_Stop(watch_slave);
-    esl_stopwatch_Include(postssv_watch_master, watch_slave);
-  }
-*/
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 
   if (pli_tmp != NULL) {
@@ -1718,45 +1726,37 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp, "Query model(s):                %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences:              %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp,   "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp,   "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 
-  if (pli->long_targets) {
-      fprintf(ofp, "Residues passing SSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_msv,
+  if (pli->long_targets) { // nhmmer style
+      fprintf(ofp, "Residues passing SSV filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_msv,
           (double)pli->pos_past_msv / (pli->nres*pli->nmodels) ,
           pli->F1);
 
-      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_bias,
+      fprintf(ofp, "Residues passing bias filter:%15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_bias,
           (double)pli->pos_past_bias / (pli->nres*pli->nmodels) ,
           pli->F1);
 
-      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_vit,
+      fprintf(ofp, "Residues passing Vit filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_vit,
           (double)pli->pos_past_vit / (pli->nres*pli->nmodels) ,
           pli->F2);
 
-      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_fwd,
+      fprintf(ofp, "Residues passing Fwd filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_fwd,
           (double)pli->pos_past_fwd / (pli->nres*pli->nmodels) ,
           pli->F3);
 
-      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
+      fprintf(ofp, "Total number of hits:        %15d  (%.3g)\n",
           (int)pli->n_output,
           (double)pli->pos_output / (pli->nres*pli->nmodels) );
 
@@ -1810,7 +1810,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
  * ./pipeline_example <hmmfile> <sqfile>
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -1866,8 +1866,8 @@ main(int argc, char **argv)
   p7_FLogsumInit();
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Open a sequence file */
@@ -1949,7 +1949,7 @@ main(int argc, char **argv)
  * ./pipeline_example2 <hmmdb> <sqfile>
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -2011,7 +2011,7 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
 
   /* Open the HMM db */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
   /* Create a pipeline for the query sequence in scan mode */
   pli      = p7_pipeline_Create(go, 100, sq->n, FALSE, p7_SCAN_MODELS);
@@ -2077,10 +2077,3 @@ main(int argc, char **argv)
 /*--------------- end, scan mode (HMM db) example ---------------*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

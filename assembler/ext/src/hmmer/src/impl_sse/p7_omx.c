@@ -3,15 +3,13 @@
  * Contents:
  *   1. The P7_OMX structure: a dynamic programming matrix
  *   2. Debugging dumps of P7_OMX structures
- *   3. Copyright and license information
  * 
  * See also:
  *   p7_omx.ai - figure illustrating the layout of a P7_OMX.
  *
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
- * SVN $Id$
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -81,9 +79,9 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->allocQ4  = p7O_NQF(allocM);
   ox->allocQ8  = p7O_NQW(allocM);
   ox->allocQ16 = p7O_NQB(allocM);
-  ox->ncells   = ox->allocR * ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
+  ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
-  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * ox->allocR * ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
   ESL_ALLOC(ox->dpb,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
@@ -93,9 +91,9 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
 
   for (i = 1; i <= allocL; i++) {
-    ox->dpf[i] = ox->dpf[0] + i * ox->allocQ4  * p7X_NSCELLS;
-    ox->dpw[i] = ox->dpw[0] + i * ox->allocQ8  * p7X_NSCELLS;
-    ox->dpb[i] = ox->dpb[0] + i * ox->allocQ16;
+    ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) ox->allocQ4  * p7X_NSCELLS;
+    ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) ox->allocQ8  * p7X_NSCELLS;
+    ox->dpb[i] = ox->dpb[0] + (int64_t) i * (int64_t) ox->allocQ16;
   }
 
   ox->allocXR = allocXL+1;
@@ -106,7 +104,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->L              = 0;
   ox->totscale       = 0.0;
   ox->has_own_scales = TRUE;	/* most matrices are Forward, control their own scale factors */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->debugging = FALSE;
   ox->dfp       = NULL;
 #endif
@@ -139,14 +137,14 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
 int
 p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 {
-  void  *p;
-  int    nqf  = p7O_NQF(allocM);	       /* segment length; total # of striped vectors for uchar */
-  int    nqw  = p7O_NQW(allocM);	       /* segment length; total # of striped vectors for float */
-  int    nqb  = p7O_NQB(allocM);	       /* segment length; total # of striped vectors for float */
-  size_t ncells = (allocL+1) * nqf * 4;
-  int    reset_row_pointers = FALSE;
-  int    i;
-  int    status;
+  void   *p;
+  int     nqf    = p7O_NQF(allocM);	   /* segment length; total # of striped vectors for uchar */
+  int     nqw    = p7O_NQW(allocM);	   /* segment length; total # of striped vectors for float */
+  int     nqb    = p7O_NQB(allocM);	   /* segment length; total # of striped vectors for float */
+  int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf * 4;
+  int     reset_row_pointers = FALSE;
+  int     i;
+  int     status;
  
   /* If all possible dimensions are already satisfied, the matrix is fine */
   if (ox->allocQ4*4 >= allocM && ox->validR > allocL && ox->allocXR >= allocXL+1) return eslOK;
@@ -156,7 +154,7 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
    */
   if (ncells > ox->ncells)
     {
-      ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (allocL+1) * nqf * p7X_NSCELLS + 15);
+      ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (int64_t) (allocL+1) * (int64_t) nqf * p7X_NSCELLS + 15);
       ox->ncells = ncells;
       reset_row_pointers = TRUE;
     }
@@ -199,9 +197,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ox->validR = ESL_MIN( ox->ncells / (nqf * 4), ox->allocR);
       for (i = 1; i < ox->validR; i++)
 	{
-	  ox->dpb[i] = ox->dpb[0] + i * nqb;
-	  ox->dpw[i] = ox->dpw[0] + i * nqw * p7X_NSCELLS;
-	  ox->dpf[i] = ox->dpf[0] + i * nqf * p7X_NSCELLS;
+	  ox->dpb[i] = ox->dpb[0] + (int64_t) i * (int64_t) nqb;
+	  ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) nqw * p7X_NSCELLS;
+	  ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) nqf * p7X_NSCELLS;
 	}
 
       ox->allocQ4  = nqf;
@@ -274,7 +272,7 @@ p7_omx_Reuse(P7_OMX *ox)
   ox->L              = 0;
   ox->totscale       = 0.0;
   ox->has_own_scales = TRUE;	/* default assumes a Forward matrix, with its own scale factors */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->debugging      = FALSE;
   ox->dfp            = NULL;
 #endif
@@ -340,7 +338,7 @@ p7_omx_Destroy(P7_OMX *ox)
  *            calculation.)
  *            
  *            If the code has not been compiled with the
- *            <p7_DEBUGGING> flag up, this function is a no-op.
+ *            <eslDEBUGLEVEL> flag set nonzero, this function is a no-op.
  *
  * Args:      fp        - output stream for diagnostics (stdout, perhaps)
  *            ox        - DP matrix to set debugging mode
@@ -355,7 +353,7 @@ p7_omx_Destroy(P7_OMX *ox)
 int
 p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse)
 {
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->debugging = truefalse;
   ox->dfp       = fp;
 #endif
@@ -621,24 +619,3 @@ ERROR:
 /*------------- end, debugging dumps of P7_OMX ------------------*/
 
 
-
-/*****************************************************************
- * 3. Unit tests
- *****************************************************************/
-/*---------------------- end, unit tests ------------------------*/
-
-/*****************************************************************
- * 4. Test driver
- *****************************************************************/
-/*---------------------- end, test driver -----------------------*/
-
-
-/*****************************************************************
- * 13. Example
- *****************************************************************/
-/*------------------------ example ------------------------------*/
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

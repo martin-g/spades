@@ -6,16 +6,14 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  *
  * See p7_domaindef.c -- null2 correction of per-seq and per-domain
  * scores is embedded within p7_domaindef's logic; we split it out
  * to a separate file because it's so important.
  * 
  * SRE, Thu Feb 28 09:51:27 2008 [Janelia]
- * SVN $Id$
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -234,7 +232,7 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
                  -----------------    ------------------     -------------------
    21 Aug 2008    7.77u (185 Mc/s)     14.13u (192 Mc/s)     139.03u (165.6 Mc/s)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -278,8 +276,8 @@ main(int argc, char **argv)
   float           fsc, bsc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
@@ -362,7 +360,7 @@ utest_correct_normalization(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, ESL_DS
 /* gcc -o null2_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7NULL2_TESTDRIVE null2.c -lhmmer -leasel -lm
  * ./null2_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -433,17 +431,8 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * 5. Example
- *****************************************************************/
-#ifdef p7GENERIC_NULL2_EXAMPLE
-
-#endif /*p7GENERIC_NULL2_EXAMPLE*/
-/*------------------------ example ------------------------------*/
 
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
 

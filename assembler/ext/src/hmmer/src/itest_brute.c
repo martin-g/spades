@@ -27,17 +27,17 @@
  * etc) are then verified against the generic implementations. 
  * 
  * SRE, Tue Jul 17 08:17:36 2007 [Janelia]
- * SVN $Id$
  * xref J1/106-109: original implementation
  * xref J5/118:     revival; brought up to date with H3's assumptions of zero insert scores.
  */
 
 /*  gcc -std=c99 -g -Wall -I. -I../easel -L. -L../easel -o itest_brute itest_brute.c  -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dirichlet.h"
 #include "esl_getopts.h"
 #include "esl_vectorops.h"
 

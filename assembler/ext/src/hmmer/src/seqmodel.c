@@ -5,10 +5,8 @@
  *   2. Experiment driver: generating HMMs for hmmsim tests
  *   3. Unit tests.
  *   4. Test driver.
- *   5. Copyright and license.
  */
-
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -114,7 +112,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
  * gcc -o seq2hmm -g -Wall -Dp7EXP_J2_1 -L../easel -I ../easel -L. -I. seqmodel.c -lhmmer -leasel -lm 
  * ./seq2hmm <hmmfile> <seqfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -272,7 +270,7 @@ utest_normalization(ESL_GETOPTS *go)
  *****************************************************************/
 #ifdef p7SEQMODEL_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "hmmer.h"
 
@@ -301,9 +299,4 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+

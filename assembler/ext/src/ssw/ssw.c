@@ -35,7 +35,11 @@
  *
  */
 
+#ifdef __aarch64__
+#include "sse2neon.h"
+#else
 #include <emmintrin.h>
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
